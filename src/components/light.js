@@ -1035,459 +1035,460 @@
 
 
 
-// import React, { useEffect, useRef, useState } from "react";
-// import * as THREE from "three";
-// import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import React, { useEffect, useRef, useState } from "react";
+import * as THREE from "three";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 
-// const GroupRotateExample = () => {
-//   const containerRef = useRef();
-
-//   const sceneRef = useRef();
-//   const cameraRef = useRef();
-//   const rendererRef = useRef();
-//   const controlsRef = useRef();
-
-//   const groupRef = useRef(new THREE.Group()); // chứa 3 box con
-//   const bboxGroupRef = useRef(new THREE.Group()); // chứa bboxHelper, xoay bboxGroup
-
-//   const bboxHelperRef = useRef();
-
-//   const [isRotateMode, setIsRotateMode] = useState(false);
-//   const isDraggingRef = useRef(false);
-//   const pointerStartRef = useRef(new THREE.Vector2());
-//   const bboxStartRotationRef = useRef(new THREE.Euler());
-
-//   useEffect(() => {
-//     const scene = new THREE.Scene();
-//     scene.background = new THREE.Color(0x222222);
-//     sceneRef.current = scene;
-
-//     const camera = new THREE.PerspectiveCamera(
-//       75,
-//       window.innerWidth / window.innerHeight,
-//       0.1,
-//       1000
-//     );
-//     camera.position.set(0, 30, 40);
-//     camera.lookAt(0, 0, 0);
-//     cameraRef.current = camera;
-
-//     const renderer = new THREE.WebGLRenderer({ antialias: true });
-//     renderer.setSize(window.innerWidth, window.innerHeight);
-//     containerRef.current.appendChild(renderer.domElement);
-//     rendererRef.current = renderer;
-
-//     const controls = new OrbitControls(camera, renderer.domElement);
-//     controls.enableDamping = true;
-//     controlsRef.current = controls;
-
-//     // Grid và trục OXYZ
-//     scene.add(new THREE.GridHelper(50, 50));
-//     scene.add(new THREE.AxesHelper(5));
-
-//     // Ánh sáng
-//     const light = new THREE.DirectionalLight(0xffffff, 1);
-//     light.position.set(10, 20, 10);
-//     scene.add(light);
-//     scene.add(new THREE.AmbientLight(0xffffff, 0.3));
-
-//     // Tạo 3 box con, add vào groupRef (chỉ chứa box, ko xoay)
-//     const boxGeo = new THREE.BoxGeometry(2, 2, 2);
-//     const mat = new THREE.MeshStandardMaterial({ color: 0x0088ff });
-
-//     const m1 = new THREE.Mesh(boxGeo, mat);
-//     m1.position.set(-5, 1, 0);
-//     const m2 = new THREE.Mesh(boxGeo, mat);
-//     m2.position.set(0, 1, 0);
-//     const m3 = new THREE.Mesh(boxGeo, mat);
-//     m3.position.set(5, 1, 0);
-
-//     const group = groupRef.current;
-//     group.add(m1, m2, m3);
-//     scene.add(group);
-
-//     // Tạo bounding box chính xác của group
-//     const box3 = new THREE.Box3().setFromObject(group);
-//     const center = box3.getCenter(new THREE.Vector3());
-
-//     // Dịch group về gốc bboxGroup (để group có center = 0,0,0 trong bboxGroup)
-//     group.position.sub(center);
-
-//     // Tạo Box3Helper dùng EdgesGeometry để vẽ bounding box (tạo mới geometry dựa trên box3)
-//     const geometry = new THREE.BoxGeometry(
-//       box3.max.x - box3.min.x,
-//       box3.max.y - box3.min.y,
-//       box3.max.z - box3.min.z
-//     );
-//     geometry.translate(
-//       (box3.max.x + box3.min.x) / 2 - center.x,
-//       (box3.max.y + box3.min.y) / 2 - center.y,
-//       (box3.max.z + box3.min.z) / 2 - center.z
-//     );
-
-//     // const edges = new THREE.EdgesGeometry(geometry);
-//     // const bboxHelper = new THREE.LineSegments(
-//     //   edges,
-//     //   new THREE.LineBasicMaterial({ color: 0xffff00 })
-//     // );
-//     const bboxHelper = new THREE.BoxHelper(group, 'red');
-//     // bboxHelper.visible=false
-//     bboxHelperRef.current = bboxHelper;
-
-//     // bboxGroup chứa bboxHelper, bboxGroup sẽ được xoay, đặt vị trí center
-//     const bboxGroup = bboxGroupRef.current;
-//     // Nếu bboxGroup đã có các con, xóa hết trước
-//     // while (bboxGroup.children.length > 0) {
-//     //   bboxGroup.remove(bboxGroup.children[0]);
-//     //   bboxGroup.remove(bboxGroup.children[1]);
-//     // }
-
-//     bboxGroup.position.copy(center);
-//     if (bboxGroup.children.length > 0) {
-//       console.log("vao 1111111")
-
-//     } else {
-//       console.log("vao 222222")
-//       bboxGroup.add(bboxHelper);
-//       // thêm group vào bboxGroup để cùng xoay
-//     }
-//     // bboxHelper.update();
-//     // bboxGroup.add(bboxHelper);
-//     bboxGroup.add(group);
-//     console.log("bboxGroupbboxGroup=", bboxGroup)
-//     console.log("scene=",scene)
-
-//     scene.add(bboxGroup);
-
-
-//     // Hàm cập nhật bounding box helper khi group thay đổi
-//     function updateBoundingBoxHelper() {
-//       // Tính bounding box mới của group
-//       const box = new THREE.Box3().setFromObject(group);
-
-//       // Tạo geometry mới tương ứng với bounding box mới
-//       const newGeo = new THREE.BoxGeometry(
-//         box.max.x - box.min.x,
-//         box.max.y - box.min.y,
-//         box.max.z - box.min.z
-//       );
-//       newGeo.translate(
-//         (box.max.x + box.min.x) / 2 - bboxGroup.position.x,
-//         (box.max.y + box.min.y) / 2 - bboxGroup.position.y,
-//         (box.max.z + box.min.z) / 2 - bboxGroup.position.z
-//       );
-
-//       // Dispose geometry cũ rồi thay geometry mới cho edges
-//       bboxHelper.geometry.dispose();
-//       bboxHelper.geometry = new THREE.EdgesGeometry(newGeo);
-//     }
-
-//     // Sự kiện xoay bboxGroup khi bật rotate mode
-//     function onPointerDown(event) {
-//       if (!isRotateMode) return;
-
-//       isDraggingRef.current = true;
-//       pointerStartRef.current.set(event.clientX, event.clientY);
-
-//       // Lưu rotation hiện tại (clone Euler)
-//       bboxStartRotationRef.current = bboxGroup.rotation.clone();
-//       controls.enabled = false;
-//     }
-
-//     function onPointerMove(event) {
-//       if (!isRotateMode || !isDraggingRef.current) return;
-
-//       const deltaX = event.clientX - pointerStartRef.current.x;
-//       const deltaY = event.clientY - pointerStartRef.current.y;
-
-//       const speed = 0.005;
-
-//       bboxGroup.rotation.y = bboxStartRotationRef.current.y + deltaX * speed;
-//       bboxGroup.rotation.x = bboxStartRotationRef.current.x + deltaY * speed;
-
-//       updateBoundingBoxHelper();
-//     }
-
-//     function onPointerUp() {
-//       isDraggingRef.current = false;
-//       controls.enabled = true;
-//     }
-
-//     renderer.domElement.addEventListener("pointerdown", onPointerDown);
-//     renderer.domElement.addEventListener("pointermove", onPointerMove);
-//     renderer.domElement.addEventListener("pointerup", onPointerUp);
-
-//     // Resize
-//     const onResize = () => {
-//       camera.aspect = window.innerWidth / window.innerHeight;
-//       camera.updateProjectionMatrix();
-//       renderer.setSize(window.innerWidth, window.innerHeight);
-//     };
-
-//     window.addEventListener("resize", onResize);
-
-//     // Animation loop
-//     const animate = () => {
-//       requestAnimationFrame(animate);
-//       if (!isDraggingRef.current) controls.update();
-//       renderer.render(scene, camera);
-//     };
-//     animate();
-//     // Cleanup
-//     return () => {
-//       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
-//       renderer.domElement.removeEventListener("pointermove", onPointerMove);
-//       renderer.domElement.removeEventListener("pointerup", onPointerUp);
-//       window.removeEventListener("resize", onResize);
-
-//       scene.remove(bboxHelper)
-//       scene.remove(group);
-//       controls.dispose();
-//       renderer.dispose();
-//       containerRef.current.removeChild(renderer.domElement);
-//     };
-//   }, [isRotateMode]);
-
-//   return (
-//     <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
-//       <button
-//         onClick={() => setIsRotateMode((prev) => !prev)}
-//         style={{
-//           position: "absolute",
-//           top: 20,
-//           left: 20,
-//           zIndex: 1,
-//           padding: "8px 12px",
-//           fontSize: "14px",
-//           background: isRotateMode ? "#ffcc00" : "#333",
-//           color: isRotateMode ? "#000" : "#fff",
-//           border: "none",
-//           borderRadius: "4px",
-//           cursor: "pointer",
-//         }}
-//       >
-//         {isRotateMode ? "Rotate Mode: ON" : "Rotate Mode: OFF"}
-//       </button>
-//       <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
-//     </div>
-//   );
-// };
-
-// export default GroupRotateExample;
-
-
-import React, { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
-import Stats from 'three/examples/jsm/libs/stats.module.js';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { SelectionBox } from 'three/examples/jsm/interactive/SelectionBox.js';
-import { SelectionHelper } from 'three/examples/jsm/interactive/SelectionHelper.js';
-
-export default function BoxSelection() {
+const GroupRotateExample = () => {
   const containerRef = useRef();
-  const rendererRef = useRef();
-  const cameraRef = useRef();
-  const sceneRef = useRef();
-  const controlsRef = useRef();
-  const selectionBoxRef = useRef();
-  const helperRef = useRef();
-  const statsRef = useRef();
-  const [selectedCount, setSelectedCount] = useState(0);
-  const isSelectingRef = useRef(false);
-   const selectionRectRef = useRef();
-  const selectionHelperRef = useRef();
-  const gridSize = [400, 400]
-   const [cameraPosition, setCameraPosition] = useState([gridSize[0], gridSize[0], gridSize[1]]);
 
- 
+  const sceneRef = useRef();
+  const cameraRef = useRef();
+  const rendererRef = useRef();
+  const controlsRef = useRef();
+
+  const groupRef = useRef(new THREE.Group()); // chứa 3 box con
+  const bboxGroupRef = useRef(new THREE.Group()); // chứa bboxHelper, xoay bboxGroup
+
+  const bboxHelperRef = useRef();
+
+  const [isRotateMode, setIsRotateMode] = useState(false);
+  const isDraggingRef = useRef(false);
+  const pointerStartRef = useRef(new THREE.Vector2());
+  const bboxStartRotationRef = useRef(new THREE.Euler());
+
   useEffect(() => {
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0xf0f0f0);
+    scene.background = new THREE.Color(0x222222);
     sceneRef.current = scene;
 
-    const sceneWidth = containerRef.current.clientWidth;
-    const sceneHeight = containerRef.current.clientHeight;
-    // const camera = new THREE.PerspectiveCamera(70, sceneWidth / sceneHeight, 0.1, 500);
     const camera = new THREE.PerspectiveCamera(
-      90,
-      sceneWidth / sceneHeight,
+      75,
+      window.innerWidth / window.innerHeight,
       0.1,
-      2000
+      1000
     );
-
-    camera.position.z = 50;
+    camera.position.set(0, 30, 40);
+    camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
-    // Thêm trục tọa độ
-    const axesHelper = new THREE.AxesHelper(20);
-    scene.add(axesHelper);
-
-    // Thêm lưới trên mặt phẳng XZ
-    const gridHelper = new THREE.GridHelper(400, 400);
-    scene.add(gridHelper);
-
     const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFShadowMap;
-    rendererRef.current = renderer;
     containerRef.current.appendChild(renderer.domElement);
-
-    const stats = new Stats();
-    statsRef.current = stats;
-    containerRef.current.appendChild(stats.dom);
+    rendererRef.current = renderer;
 
     const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
     controlsRef.current = controls;
 
-    scene.add(new THREE.AmbientLight(0xaaaaaa));
-    const light = new THREE.SpotLight(0xffffff, 10000);
-    light.position.set(0, 25, 50);
-    light.angle = Math.PI / 5;
-    light.castShadow = true;
-    light.shadow.camera.near = 10;
-    light.shadow.camera.far = 100;
-    light.shadow.mapSize.set(1024, 1024);
-    scene.add(light);
+    // Grid và trục OXYZ
+    scene.add(new THREE.GridHelper(50, 50));
+    scene.add(new THREE.AxesHelper(5));
 
-    const geometry = new THREE.BoxGeometry();
-    for (let i = 0; i < 200; i++) {
-      const object = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff }));
-      object.position.set(Math.random() * 80 - 40, Math.random() * 45 - 25, Math.random() * 45 - 25);
-      object.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2);
-      object.scale.set(Math.random() * 2 + 1, Math.random() * 2 + 1, Math.random() * 2 + 1);
-      object.castShadow = true;
-      object.receiveShadow = true;
-      scene.add(object);
+    // Ánh sáng
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(10, 20, 10);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.3));
+
+    // Tạo 3 box con, add vào groupRef (chỉ chứa box, ko xoay)
+    const boxGeo = new THREE.BoxGeometry(2, 2, 2);
+    const mat = new THREE.MeshStandardMaterial({ color: 0x0088ff });
+
+    const m1 = new THREE.Mesh(boxGeo, mat);
+    m1.position.set(-5, 1, 0);
+    const m2 = new THREE.Mesh(boxGeo, mat);
+    m2.position.set(0, 1, 0);
+    const m3 = new THREE.Mesh(boxGeo, mat);
+    m3.position.set(5, 1, 0);
+
+    const group = groupRef.current;
+    group.add(m1, m2, m3);
+    scene.add(group);
+
+    // Tạo bounding box chính xác của group
+    const box3 = new THREE.Box3().setFromObject(group);
+    const center = box3.getCenter(new THREE.Vector3());
+
+    // Dịch group về gốc bboxGroup (để group có center = 0,0,0 trong bboxGroup)
+    group.position.sub(center);
+
+    // Tạo Box3Helper dùng EdgesGeometry để vẽ bounding box (tạo mới geometry dựa trên box3)
+    const geometry = new THREE.BoxGeometry(
+      box3.max.x - box3.min.x,
+      box3.max.y - box3.min.y,
+      box3.max.z - box3.min.z
+    );
+    geometry.translate(
+      (box3.max.x + box3.min.x) / 2 - center.x,
+      (box3.max.y + box3.min.y) / 2 - center.y,
+      (box3.max.z + box3.min.z) / 2 - center.z
+    );
+
+    // const edges = new THREE.EdgesGeometry(geometry);
+    // const bboxHelper = new THREE.LineSegments(
+    //   edges,
+    //   new THREE.LineBasicMaterial({ color: 0xffff00 })
+    // );
+    const bboxHelper = new THREE.BoxHelper(group, 'red');
+    // bboxHelper.visible=false
+    bboxHelperRef.current = bboxHelper;
+
+    // bboxGroup chứa bboxHelper, bboxGroup sẽ được xoay, đặt vị trí center
+    const bboxGroup = bboxGroupRef.current;
+    // Nếu bboxGroup đã có các con, xóa hết trước
+    while (bboxGroup.children.length > 0) {
+      bboxGroup.remove(bboxGroup.children[0]);
+      bboxGroup.remove(bboxGroup.children[1]);
     }
 
-    const selectionBox = new SelectionBox(camera, scene);
-    selectionBoxRef.current = selectionBox;
-    const helper = new SelectionHelper(renderer, 'selectBox');
-    helperRef.current = helper;
-    // helper.enabled = false;
+    bboxGroup.position.copy(center);
+    if (bboxGroup.children.length > 0) {
+      console.log("vao 1111111")
 
-    const animate = () => {
-      requestAnimationFrame(animate);
-      controls.update();
-      renderer.render(scene, camera);
-      stats.update();
-    };
-    animate();
+    } else {
+      console.log("vao 222222")
+      // bboxGroup.add(bboxHelper);
+      // thêm group vào bboxGroup để cùng xoay
+    }
+   
+    bboxGroup.add(bboxHelper);
+    bboxGroup.add(group);
+     bboxHelper.update();
+    console.log("bboxGroupbboxGroup=", bboxGroup)
+    console.log("scene=",scene)
 
-    const onWindowResize = () => {
+    scene.add(bboxGroup);
+
+
+    // Hàm cập nhật bounding box helper khi group thay đổi
+    function updateBoundingBoxHelper() {
+      // Tính bounding box mới của group
+      const box = new THREE.Box3().setFromObject(group);
+
+      // Tạo geometry mới tương ứng với bounding box mới
+      const newGeo = new THREE.BoxGeometry(
+        box.max.x - box.min.x,
+        box.max.y - box.min.y,
+        box.max.z - box.min.z
+      );
+      newGeo.translate(
+        (box.max.x + box.min.x) / 2 - bboxGroup.position.x,
+        (box.max.y + box.min.y) / 2 - bboxGroup.position.y,
+        (box.max.z + box.min.z) / 2 - bboxGroup.position.z
+      );
+
+      // Dispose geometry cũ rồi thay geometry mới cho edges
+      bboxHelper.geometry.dispose();
+      bboxHelper.geometry = new THREE.EdgesGeometry(newGeo);
+    }
+
+    // Sự kiện xoay bboxGroup khi bật rotate mode
+    function onPointerDown(event) {
+      if (!isRotateMode) return;
+
+      isDraggingRef.current = true;
+      pointerStartRef.current.set(event.clientX, event.clientY);
+
+      // Lưu rotation hiện tại (clone Euler)
+      bboxStartRotationRef.current = bboxGroup.rotation.clone();
+      controls.enabled = false;
+    }
+
+    function onPointerMove(event) {
+      if (!isRotateMode || !isDraggingRef.current) return;
+
+      const deltaX = event.clientX - pointerStartRef.current.x;
+      const deltaY = event.clientY - pointerStartRef.current.y;
+
+      const speed = 0.005;
+
+      bboxGroup.rotation.y = bboxStartRotationRef.current.y + deltaX * speed;
+      bboxGroup.rotation.x = bboxStartRotationRef.current.x + deltaY * speed;
+
+      // updateBoundingBoxHelper();
+    }
+
+    function onPointerUp() {
+      isDraggingRef.current = false;
+      controls.enabled = true;
+    }
+
+    renderer.domElement.addEventListener("pointerdown", onPointerDown);
+    renderer.domElement.addEventListener("pointermove", onPointerMove);
+    renderer.domElement.addEventListener("pointerup", onPointerUp);
+
+    // Resize
+    const onResize = () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     };
-    window.addEventListener('resize', onWindowResize);
 
-    const onPointerDown = (event) => {
-      if (event.shiftKey) {
-        isSelectingRef.current = true;
-        controls.enabled = false;
-        // helper.enabled = true;
+    window.addEventListener("resize", onResize);
 
-        for (const item of selectionBox.collection) {
-          item.material.emissive.set(0x000000);
-        }
-
-        selectionBox.startPoint.set(
-          (event.clientX / window.innerWidth) * 2 - 1,
-          -(event.clientY / window.innerHeight) * 2 + 1,
-          0.5
-        );
-      } else {
-        isSelectingRef.current = false;
-        controls.enabled = true;
-        // helper.enabled = false;
-      }
+    // Animation loop
+    const animate = () => {
+      requestAnimationFrame(animate);
+      if (!isDraggingRef.current) controls.update();
+      renderer.render(scene, camera);
     };
-
-    const onPointerMove = (event) => {
-      if (!isSelectingRef.current) return;
-
-      for (const item of selectionBox.collection) {
-        item.material.emissive.set(0x000000);
-      }
-
-      // selectionBox.endPoint.set(
-      //   (event.clientX / window.innerWidth) * 2 - 1,
-      //   -(event.clientY / window.innerHeight) * 2 + 1,
-      //   0.5
-      // );
-
-      // const allSelected = selectionBox.select();
-      // for (const item of allSelected) {
-      //   item.material.emissive.set(0xffffff);
-      // }
-    };
-
-    const onPointerUp = (event) => {
-      if (!isSelectingRef.current) return;
-
-      isSelectingRef.current = false;
-      controls.enabled = true;
-      // helper.enabled = false;
-
-      selectionBox.endPoint.set(
-        (event.clientX / window.innerWidth) * 2 - 1,
-        -(event.clientY / window.innerHeight) * 2 + 1,
-        0.5
-      );
-
-      // const allSelected = selectionBox.select();
-      // for (const item of allSelected) {
-      //   item.material.emissive.set(0xffffff);
-      // }
-
-      // setSelectedCount(allSelected.length);
-    };
-
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('pointermove', onPointerMove);
-    document.addEventListener('pointerup', onPointerUp);
-
+    animate();
+    // Cleanup
     return () => {
-      window.removeEventListener('resize', onWindowResize);
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('pointermove', onPointerMove);
-      document.removeEventListener('pointerup', onPointerUp);
-      stats.dom.remove();
+      renderer.domElement.removeEventListener("pointerdown", onPointerDown);
+      renderer.domElement.removeEventListener("pointermove", onPointerMove);
+      renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("resize", onResize);
+
+      scene.remove(bboxHelper)
+      scene.remove(group);
+      controls.dispose();
       renderer.dispose();
-      scene.clear();
       containerRef.current.removeChild(renderer.domElement);
     };
-  }, []);
+  }, [isRotateMode]);
 
   return (
-    <>
-      <div ref={containerRef} style={{ width: '50vw', height: '50vh', marginTop: "100px", paddingTop: "100px" }} />
-      <div
+    <div style={{ width: "100vw", height: "100vh", position: "relative" }}>
+      <button
+        onClick={() => setIsRotateMode((prev) => !prev)}
         style={{
-          position: 'absolute',
-          top: 10,
-          left: 10,
-          color: '#000',
-          fontWeight: 'bold',
-          userSelect: 'none',
-          backgroundColor: '#fff',
-          padding: '5px 10px',
-          borderRadius: 4,
-          opacity: 0.8,
+          position: "absolute",
+          top: 20,
+          left: 20,
+          zIndex: 1,
+          padding: "8px 12px",
+          fontSize: "14px",
+          background: isRotateMode ? "#ffcc00" : "#333",
+          color: isRotateMode ? "#000" : "#fff",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
         }}
       >
-        Selected boxes: {selectedCount}
-      </div>
-      <style>{`
-        .selectBox {
-          border: 1px solid #55aaff;
-          background-color: rgba(75, 160, 255, 0.3);
-          position: fixed;
-          pointer-events: none;
-        }
-      `}</style>
-    </>
+        {isRotateMode ? "Rotate Mode: ON" : "Rotate Mode: OFF"}
+      </button>
+      <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+    </div>
   );
-}
+};
+
+export default GroupRotateExample;
+
+
+// import React, { useEffect, useRef, useState } from 'react';
+// import * as THREE from 'three';
+// import Stats from 'three/examples/jsm/libs/stats.module.js';
+// import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+// import { SelectionBox } from 'three/examples/jsm/interactive/SelectionBox.js';
+// import { SelectionHelper } from 'three/examples/jsm/interactive/SelectionHelper.js';
+
+// export default function BoxSelection() {
+//   const containerRef = useRef();
+//   const rendererRef = useRef();
+//   const cameraRef = useRef();
+//   const sceneRef = useRef();
+//   const controlsRef = useRef();
+//   const selectionBoxRef = useRef();
+//   const helperRef = useRef();
+//   const statsRef = useRef();
+//   const [selectedCount, setSelectedCount] = useState(0);
+//   const isSelectingRef = useRef(false);
+//    const selectionRectRef = useRef();
+//   const selectionHelperRef = useRef();
+//   const gridSize = [400, 400]
+//    const [cameraPosition, setCameraPosition] = useState([gridSize[0], gridSize[0], gridSize[1]]);
+
+ 
+//   useEffect(() => {
+//     const scene = new THREE.Scene();
+//     scene.background = new THREE.Color(0xf0f0f0);
+//     sceneRef.current = scene;
+
+//     const sceneWidth = containerRef.current.clientWidth;
+//     const sceneHeight = containerRef.current.clientHeight;
+//     // const camera = new THREE.PerspectiveCamera(70, sceneWidth / sceneHeight, 0.1, 500);
+//     const camera = new THREE.PerspectiveCamera(
+//       90,
+//       sceneWidth / sceneHeight,
+//       0.1,
+//       2000
+//     );
+
+//     camera.position.z = 50;
+//     cameraRef.current = camera;
+
+//     // Thêm trục tọa độ
+//     const axesHelper = new THREE.AxesHelper(20);
+//     scene.add(axesHelper);
+
+//     // Thêm lưới trên mặt phẳng XZ
+//     const gridHelper = new THREE.GridHelper(400, 400);
+//     scene.add(gridHelper);
+
+//     const renderer = new THREE.WebGLRenderer({ antialias: true });
+//     renderer.setPixelRatio(window.devicePixelRatio);
+//     renderer.setSize(window.innerWidth, window.innerHeight);
+//     renderer.shadowMap.enabled = true;
+//     renderer.shadowMap.type = THREE.PCFShadowMap;
+//     rendererRef.current = renderer;
+//     containerRef.current.appendChild(renderer.domElement);
+
+//     const stats = new Stats();
+//     statsRef.current = stats;
+//     containerRef.current.appendChild(stats.dom);
+
+//     const controls = new OrbitControls(camera, renderer.domElement);
+//     controlsRef.current = controls;
+
+//     scene.add(new THREE.AmbientLight(0xaaaaaa));
+//     const light = new THREE.SpotLight(0xffffff, 10000);
+//     light.position.set(0, 25, 50);
+//     light.angle = Math.PI / 5;
+//     light.castShadow = true;
+//     light.shadow.camera.near = 10;
+//     light.shadow.camera.far = 100;
+//     light.shadow.mapSize.set(1024, 1024);
+//     scene.add(light);
+
+//     const geometry = new THREE.BoxGeometry();
+//     for (let i = 0; i < 200; i++) {
+//       const object = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ color: Math.random() * 0xffffff }));
+//       object.position.set(Math.random() * 80 - 40, Math.random() * 45 - 25, Math.random() * 45 - 25);
+//       object.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2);
+//       object.scale.set(Math.random() * 2 + 1, Math.random() * 2 + 1, Math.random() * 2 + 1);
+//       object.castShadow = true;
+//       object.receiveShadow = true;
+//       scene.add(object);
+//     }
+
+//     const selectionBox = new SelectionBox(camera, scene);
+//     selectionBoxRef.current = selectionBox;
+//     const helper = new SelectionHelper(renderer, 'selectBox');
+//     helperRef.current = helper;
+//     // helper.enabled = false;
+
+//     const animate = () => {
+//       requestAnimationFrame(animate);
+//       controls.update();
+//       renderer.render(scene, camera);
+//       stats.update();
+//     };
+//     animate();
+
+//     const onWindowResize = () => {
+//       camera.aspect = window.innerWidth / window.innerHeight;
+//       camera.updateProjectionMatrix();
+//       renderer.setSize(window.innerWidth, window.innerHeight);
+//     };
+//     window.addEventListener('resize', onWindowResize);
+
+//     const onPointerDown = (event) => {
+//       if (event.shiftKey) {
+//         isSelectingRef.current = true;
+//         controls.enabled = false;
+//         // helper.enabled = true;
+
+//         for (const item of selectionBox.collection) {
+//           item.material.emissive.set(0x000000);
+//         }
+
+//         selectionBox.startPoint.set(
+//           (event.clientX / window.innerWidth) * 2 - 1,
+//           -(event.clientY / window.innerHeight) * 2 + 1,
+//           0.5
+//         );
+//       } else {
+//         isSelectingRef.current = false;
+//         controls.enabled = true;
+//         // helper.enabled = false;
+//       }
+//     };
+
+//     const onPointerMove = (event) => {
+//       if (!isSelectingRef.current) return;
+
+//       for (const item of selectionBox.collection) {
+//         item.material.emissive.set(0x000000);
+//       }
+
+//       // selectionBox.endPoint.set(
+//       //   (event.clientX / window.innerWidth) * 2 - 1,
+//       //   -(event.clientY / window.innerHeight) * 2 + 1,
+//       //   0.5
+//       // );
+
+//       // const allSelected = selectionBox.select();
+//       // for (const item of allSelected) {
+//       //   item.material.emissive.set(0xffffff);
+//       // }
+//     };
+
+//     const onPointerUp = (event) => {
+//       if (!isSelectingRef.current) return;
+
+//       isSelectingRef.current = false;
+//       controls.enabled = true;
+//       // helper.enabled = false;
+
+//       selectionBox.endPoint.set(
+//         (event.clientX / window.innerWidth) * 2 - 1,
+//         -(event.clientY / window.innerHeight) * 2 + 1,
+//         0.5
+//       );
+
+//       // const allSelected = selectionBox.select();
+//       // for (const item of allSelected) {
+//       //   item.material.emissive.set(0xffffff);
+//       // }
+
+//       // setSelectedCount(allSelected.length);
+//     };
+
+//     document.addEventListener('pointerdown', onPointerDown);
+//     document.addEventListener('pointermove', onPointerMove);
+//     document.addEventListener('pointerup', onPointerUp);
+
+//     return () => {
+//       window.removeEventListener('resize', onWindowResize);
+//       document.removeEventListener('pointerdown', onPointerDown);
+//       document.removeEventListener('pointermove', onPointerMove);
+//       document.removeEventListener('pointerup', onPointerUp);
+//       stats.dom.remove();
+//       renderer.dispose();
+//       scene.clear();
+//       containerRef.current.removeChild(renderer.domElement);
+//     };
+//   }, []);
+
+//   return (
+//     <>
+//       <div ref={containerRef} style={{ width: '50vw', height: '50vh', marginTop: "100px", paddingTop: "100px" }} />
+//       <div
+//         style={{
+//           position: 'absolute',
+//           top: 10,
+//           left: 10,
+//           color: '#000',
+//           fontWeight: 'bold',
+//           userSelect: 'none',
+//           backgroundColor: '#fff',
+//           padding: '5px 10px',
+//           borderRadius: 4,
+//           opacity: 0.8,
+//         }}
+//       >
+//         Selected boxes: {selectedCount}
+//       </div>
+//       <style>{`
+//         .selectBox {
+//           border: 1px solid #55aaff;
+//           background-color: rgba(75, 160, 255, 0.3);
+//           position: fixed;
+//           pointer-events: none;
+//         }
+//       `}</style>
+//     </>
+//   );
+// }
