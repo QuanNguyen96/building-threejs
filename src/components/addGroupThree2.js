@@ -130,9 +130,27 @@ import _ from "lodash";
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { SelectionHelper } from "three/examples/jsm/interactive/SelectionHelper.js";
+// import { SelectionHelper } from "three/examples/jsm/interactive/SelectionHelper.js";
+import SelectionHelper from "../utils/SelectionHelperOffset.js";
 import { SelectionBox } from "three/examples/jsm/interactive/SelectionBox.js";
+import {
+  Dialog,
+  Switch,
+  FormControlLabel,
+  Modal,
+  Box,
+  Button,
+  Typography,
+  TransitionProps,
+  Slide,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+} from "@mui/material";
 import "../styles/floorplanViewer.css";
+import { GUI } from "three/examples/jsm/libs/lil-gui.module.min.js";
+
 
 // import { TransformControls } from "three/examples/jsm/controls/TransformControls";
 
@@ -278,7 +296,7 @@ const SelectionScene = () => {
     const selectionRect = document.createElement("div");
     selectionRect.style.position = "absolute";
     selectionRect.style.border = "1px dashed blue";
-    // selectionRect.style.display = "none";
+    selectionRect.style.display = "none";
     selectionRect.style.pointerEvents = "none";
     containerRef.current.appendChild(selectionRect);
     selectionRectRef.current = selectionRect;
@@ -289,7 +307,7 @@ const SelectionScene = () => {
       renderer,
       "selectBox-selected"
     );
-    helperSelectionBoxT.enabled = true;
+    // helperSelectionBoxT.enabled = true;
     selectionHelperRefT.current = helperSelectionBoxT;
 
     // Xử lý phím Shift
@@ -362,7 +380,6 @@ const SelectionScene = () => {
         window.pageXOffset || document.documentElement.scrollLeft;
       const scrollTop =
         window.pageYOffset || document.documentElement.scrollTop;
-      console.log(`scrollLeft=${scrollLeft} scrollTop=${scrollTop} `);
       let x = e.clientX + scrollLeft;
       let y = e.clientY + scrollTop;
       selectionRectselected.style.left = `${x}px !important`;
@@ -428,16 +445,16 @@ const SelectionScene = () => {
             height: 0 + "px",
           });
           selectionHelperRefT.current.element.style.borderColor = `green`;
-          const x2 =
-            ((e.clientX + scrollLeft - rect.left) / rect.width) * 2 - 1;
-          const y2 =
-            -((e.clientY + scrollTop - rect.top) / rect.height) * 2 + 1;
-          console.log("selectionHelperRefT.current", selectionHelperRefT);
-          let selectionRectselected = selectionHelperRefT.current.element;
-          console.log("selectionRectselected", selectionRectselected);
-          selectionRectselected.style.left = `${x}px !important`;
-          selectionRectselected.style.top = `${y}px  !important`;
-          selectionRectRefT.current.startPoint.set(x2, y2, 0.5);
+          // const x2 =
+          //   ((e.clientX + scrollLeft - rect.left) / rect.width) * 2 - 1;
+          // const y2 =
+          //   -((e.clientY + scrollTop - rect.top) / rect.height) * 2 + 1;
+          // console.log("selectionHelperRefT.current", selectionHelperRefT);
+          // let selectionRectselected = selectionHelperRefT.current.element;
+          // console.log("selectionRectselected", selectionRectselected);
+          // selectionRectselected.style.left = `${x}px !important`;
+          // selectionRectselected.style.top = `${y}px  !important`;
+          selectionRectRefT.current.startPoint.set(x, y, 0.5);
           console.log("selectionRectRefT", _.cloneDeep(selectionHelperRefT));
         } else if (
           (mode === "translate" || mode === "rotate" || mode === "scale") &&
@@ -869,7 +886,228 @@ const SelectionScene = () => {
           Click vùng trống không giữ shift sẽ clear selection.
         </div>
       </div>
-      <div ref={containerRef} style={{ width: "100vw", height: "100vh" }} />
+      {/* <div ref={containerRef} style={{ width: "100vw", height: "100vh" }} /> */}
+       {/* <div ref={containerRef} style={{ width: "100%", height: "100%" }} /> */}
+
+      <div
+        style={{
+          position: "relative",
+          width: "100vw",
+          height: "100vh",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 10,
+            left: 10,
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            zIndex: 10,
+          }}
+        >
+          <input
+            className="hidden"
+            type="file"
+            accept=".glb,.zip"
+          />
+          <button
+            style={{
+              padding: "8px 12px",
+              border: "1px solid #ccc",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
+            + Import Model (file glb)
+          </button>
+          {/* <button
+               onClick={() => loadAddModel()}
+               style={{
+                 padding: "8px 12px",
+                 border: "1px solid #ccc",
+                 borderRadius: "4px",
+                 cursor: "pointer",
+               }}
+             >
+               + Add model (file glb)
+             </button> */}
+          <button
+            style={{
+              padding: "8px 12px",
+              backgroundColor: "#ffa500",
+              border: "1px solid #ccc",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
+            🟧 Kéo (Drag)
+          </button>
+          <button
+            style={{
+              padding: "8px 12px",
+              backgroundColor: "#ffa500",
+              border: "1px solid #ccc",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
+            🔄 Xoay (Rotate)
+          </button>
+          <button
+            style={{
+              padding: "8px 12px",
+              backgroundColor: "#ffa500",
+              border: "1px solid #ccc",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
+            🔍 Scale
+          </button>
+          <button
+            style={{
+              padding: "8px 12px",
+              backgroundColor: "#ff4d4f",
+              color: "#fff",
+              border: "1px solid #ccc",
+              borderRadius: "4px",
+              cursor: "pointer",
+            }}
+          >
+            🗑 Xóa
+          </button>
+          <div className="border h-full h-[40px] flex items-center p-2">
+            <FormControlLabel
+              control={
+                <Switch
+                />
+              }
+              label="OXZ:"
+              labelPlacement="start"
+            />
+          </div>
+          <div className="h-full h-[40px] flex items-center p-2">
+            <Button
+              size="small"
+              variant="contained"
+            >
+              SET Y = 0
+            </Button>
+          </div>
+          <div className="h-full h-[40px] flex items-center p-2">
+            <FormControlLabel
+              control={
+                <Switch
+                />
+              }
+              label="UseGroup:"
+              labelPlacement="start"
+            />
+          </div>
+        </div>
+        <div className="absolute top-[60px] left-[15px]">
+          <div className="flex items-center">
+            Scene Background Color:
+            <input
+              className="ip-scene-background"
+              type="text"
+              style={{ width: "80px", padding: "2px 5px" }}
+            />
+            <div
+              className="border border-solid border-black-200 ml-[8px]"
+              style={{
+                width: "26px",
+                height: "26px",
+                background: 'red',
+              }}
+            ></div>
+          </div>
+        </div>
+
+        <div className="absolute top-[90px] left-[15px] flex items-center">
+          <div className="flex items-center">
+            Wall Color:
+            <input
+              className="ip-scene-background"
+              type="text"
+              style={{ width: "80px", padding: "2px 5px" }}
+            />
+            <div
+              className="border border-solid border-black-200 ml-[8px]"
+              style={{
+                width: "26px",
+                height: "26px",
+                background: 'red',
+              }}
+            ></div>
+          </div>
+          <div className="ml-4">
+            <Button size="small" variant="contained">
+              Smooth Wall
+            </Button>
+          </div>
+        </div>
+
+        <div className="absolute top-[120px] left-[15px]">
+          <div className="flex items-center">
+            Floor Color:
+            <input
+              className="ip-scene-background"
+              type="text"
+              style={{ width: "80px", padding: "2px 5px" }}
+            />
+            <div
+              className="border border-solid border-black-200 ml-[8px]"
+              style={{
+                width: "26px",
+                height: "26px",
+                background: 'red',
+              }}
+            ></div>
+          </div>
+        </div>
+        <div className="absolute top-[150px] left-[15px] formControlLabel-display-grid">
+          <FormControlLabel
+            control={
+              <Switch
+              />
+            }
+            label="Display Grid"
+            labelPlacement="start"
+          />
+        </div>
+        <div className="absolute top-[180px] left-[15px] formControlLabel-display-grid flex-items-center">
+          <div>Camera</div>
+          <div className="flex-items-center ml-2">
+            X=
+            <input
+              type="number"
+              className="border max-w-[80px]"
+            />
+          </div>
+          <div className="flex-items-center ml-2">
+            Y=
+            <input
+              type="number"
+              className="border max-w-[80px]"
+            />
+          </div>
+          <div className="flex-items-center ml-2">
+            Z=
+            <input
+              type="number"
+              className="border max-w-[80px]"
+            />
+          </div>
+        </div>
+        <div className="absolute top-[290px] left-[15px] formControlLabel-display-grid flex-items-center">
+          Mouse 3D Position: 1,2,3
+        </div>
+        <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+      </div>
+
     </>
   );
 };

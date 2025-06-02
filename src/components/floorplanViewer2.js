@@ -12,7 +12,8 @@ import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 import { SelectionBox } from "three/examples/jsm/interactive/SelectionBox.js";
-import { SelectionHelper } from "three/examples/jsm/interactive/SelectionHelper.js";
+// import { SelectionHelper } from "three/examples/jsm/interactive/SelectionHelper.js";
+import  SelectionHelper  from "../utils/SelectionHelperOffset.js"; // SelectionHelper đã custom để nhận đúng vị trí khi có offset của window
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader"; // Nếu dùng nén
 import { RectAreaLightHelper } from "three/examples/jsm/helpers/RectAreaLightHelper.js";
 import {
@@ -570,6 +571,7 @@ const initFunc = forwardRef((props, ref) => {
         const ndc = new THREE.Vector3(x, y, 0.5); // NDC: z = giữa near và far
         ndc.unproject(camera); // Chuyển sang world
         selectionRectRef.current.startPoint.set(ndc);
+        selectionHelperRef.current.element.style.borderColor = `green`;
         // selectionHelperRef.current._onSelectStart(event);
       } else {
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -940,7 +942,6 @@ const initFunc = forwardRef((props, ref) => {
       mesh.userData.isChildGroup = true;
       mesh.userData.targetGroup = selectedGroup;
       mesh.userData.uuidTargetGroup = selectedGroup.uuid;
-      console.log("da them vao day roi ma", mesh);
       selectedGroup.attach(mesh);
     });
 
@@ -1109,7 +1110,7 @@ const initFunc = forwardRef((props, ref) => {
     // controlsRef.current = controls;
     const controls = controlsRef.current;
     // controls.target.set(gridSize[0] / 2, 0, gridSize[1] / 2);
-    // controls.update();
+    // // controls.update();
 
     // // Lights
     // const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -2271,15 +2272,12 @@ const initFunc = forwardRef((props, ref) => {
     <>
       <div
         style={{
-          position: "relative",
           width: "100vw",
           height: "100vh",
-          maxHeight: "900px",
         }}
       >
         <div
           style={{
-            position: "absolute",
             top: 10,
             left: 10,
             display: "flex",
@@ -2400,7 +2398,7 @@ const initFunc = forwardRef((props, ref) => {
             />
           </div>
         </div>
-        <div className="absolute top-[60px] left-[15px]">
+        <div className=" top-[60px] left-[15px]">
           <div className="flex items-center">
             Scene Background Color:
             <input
@@ -2442,7 +2440,7 @@ const initFunc = forwardRef((props, ref) => {
           </Dialog>
         </div>
 
-        <div className="absolute top-[90px] left-[15px] flex items-center">
+        <div className=" top-[90px] left-[15px] flex items-center">
           <div className="flex items-center">
             Wall Color:
             <input
@@ -2489,7 +2487,7 @@ const initFunc = forwardRef((props, ref) => {
           </div>
         </div>
 
-        <div className="absolute top-[120px] left-[15px]">
+        <div className=" top-[120px] left-[15px]">
           <div className="flex items-center">
             Floor Color:
             <input
@@ -2530,7 +2528,7 @@ const initFunc = forwardRef((props, ref) => {
             </DialogActions>
           </Dialog>
         </div>
-        <div className="absolute top-[150px] left-[15px] formControlLabel-display-grid">
+        <div className=" top-[150px] left-[15px] formControlLabel-display-grid">
           <FormControlLabel
             control={
               <Switch
@@ -2542,7 +2540,7 @@ const initFunc = forwardRef((props, ref) => {
             labelPlacement="start"
           />
         </div>
-        <div className="absolute top-[180px] left-[15px] formControlLabel-display-grid flex-items-center">
+        <div className=" top-[180px] left-[15px] formControlLabel-display-grid flex-items-center">
           <div>Camera</div>
           <div className="flex-items-center ml-2">
             X=
@@ -2590,7 +2588,7 @@ const initFunc = forwardRef((props, ref) => {
             />
           </div>
         </div>
-        <div className="absolute top-[290px] left-[15px] formControlLabel-display-grid flex-items-center">
+        <div className=" top-[290px] left-[15px] formControlLabel-display-grid flex-items-center">
           Mouse 3D Position: {mousePos3D.x.toFixed(2)},{" "}
           {mousePos3D.y.toFixed(2)}, {mousePos3D.z.toFixed(2)}{" "}
         </div>
