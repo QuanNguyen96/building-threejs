@@ -36,6 +36,7 @@ import { ColorPicker, useColor } from "react-color-palette";
 import { GUI } from "three/examples/jsm/libs/lil-gui.module.min.js";
 import "react-color-palette/css";
 import JSZip from "jszip";
+import { ModelNode } from "three/webgpu";
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & {
@@ -159,6 +160,50 @@ function findConsecutiveRanges(points, size) {
 
   return { result, minX, maxX, minZ, maxZ };
 }
+
+// function Wall({ start, end, height = 2.8, width = 100, scene, color = "#dbe5e6" }) {
+//   // Tạo wall dưới dạng BoxGeometry
+//   const dx = end[0] - start[0];
+//   const dz = end[1] - start[1];
+//   const length = Math.sqrt(dx * dx + dz * dz);
+//   const angle = Math.atan2(dz, dx);
+
+//   const geometry = new THREE.BoxGeometry(length, height, width);
+//   const material = new THREE.MeshStandardMaterial({ color: color });
+//   const mesh = new THREE.Mesh(geometry, material);
+//   mesh.castShadow = true;
+//   mesh.receiveShadow = true;
+//   mesh.position.set(start[0] + dx / 2, height / 2, start[1] + dz / 2);
+//   mesh.rotation.y = -angle;
+//   // Thêm hàm cập nhật chiều cao
+//   mesh.updateHeight = (newHeight) => {
+//     mesh.geometry.dispose(); // Giải phóng geometry cũ
+//     mesh.geometry = new THREE.BoxGeometry(length, newHeight, width);
+//     mesh.position.y = newHeight / 2;
+//   };
+//   mesh.updateColor = (newColor) => {
+//     if (mesh.material) {
+//       mesh.material.color.set(newColor);
+//       mesh.material.needsUpdate = true;
+//     }
+//   };
+
+//   scene.add(mesh);
+
+//   return mesh;
+// }
+
+// Tạo random 30 điểm trên lưới 10x10
+function generateRandomPoints(numPoints, maxI, maxJ) {
+  const points = [];
+  for (let k = 0; k < numPoints; k++) {
+    const i = Math.floor(Math.random() * (maxI + 1));
+    const j = Math.floor(Math.random() * (maxJ + 1));
+    points.push([i, j]);
+  }
+  return points;
+}
+
 function findRectangles(matrix) {
   const rows = matrix.length;
   const cols = matrix[0].length;
@@ -226,49 +271,6 @@ function createLabeledArray(size, indices) {
   }
 
   return array;
-}
-
-// function Wall({ start, end, height = 2.8, width = 100, scene, color = "#dbe5e6" }) {
-//   // Tạo wall dưới dạng BoxGeometry
-//   const dx = end[0] - start[0];
-//   const dz = end[1] - start[1];
-//   const length = Math.sqrt(dx * dx + dz * dz);
-//   const angle = Math.atan2(dz, dx);
-
-//   const geometry = new THREE.BoxGeometry(length, height, width);
-//   const material = new THREE.MeshStandardMaterial({ color: color });
-//   const mesh = new THREE.Mesh(geometry, material);
-//   mesh.castShadow = true;
-//   mesh.receiveShadow = true;
-//   mesh.position.set(start[0] + dx / 2, height / 2, start[1] + dz / 2);
-//   mesh.rotation.y = -angle;
-//   // Thêm hàm cập nhật chiều cao
-//   mesh.updateHeight = (newHeight) => {
-//     mesh.geometry.dispose(); // Giải phóng geometry cũ
-//     mesh.geometry = new THREE.BoxGeometry(length, newHeight, width);
-//     mesh.position.y = newHeight / 2;
-//   };
-//   mesh.updateColor = (newColor) => {
-//     if (mesh.material) {
-//       mesh.material.color.set(newColor);
-//       mesh.material.needsUpdate = true;
-//     }
-//   };
-
-//   scene.add(mesh);
-
-//   return mesh;
-// }
-
-// Tạo random 30 điểm trên lưới 10x10
-function generateRandomPoints(numPoints, maxI, maxJ) {
-  const points = [];
-  for (let k = 0; k < numPoints; k++) {
-    const i = Math.floor(Math.random() * (maxI + 1));
-    const j = Math.floor(Math.random() * (maxJ + 1));
-    points.push([i, j]);
-  }
-  return points;
 }
 
 function Wall({
@@ -413,7 +415,6 @@ function Wall2({
   return mesh;
 }
 
-
 function CustomGrid({
   width = 10,
   height = 10,
@@ -466,7 +467,7 @@ function usePrevious(value) {
 }
 // export default function FloorplanViewer({ dataDeepFloorplan, wallHeight }) {
 const initFunc = forwardRef((props, ref) => {
-  const { dataDeepFloorplan, wallHeight } = props;
+  const { dataDeepFloorplan, wallHeight, modelName, mergeWallsT } = props;
   const containerRef = useRef(null);
   const [mousePos3D, setMousePos3D] = useState(new THREE.Vector3());
   const [gridSize, setGridSize] = useState([400, 400]);
@@ -504,8 +505,10 @@ const initFunc = forwardRef((props, ref) => {
   const gridSenceRef = useRef();
   const cameraSphereRef = useRef();
   const mountRef = useRef(null);
-  const modeRef = useRef("drag");
-  const [modeUI, setModeUI] = useState("drag");
+  // const modeRef = useRef("drag");
+  // const [modeUI, setModeUI] = useState("drag");
+  const modeRef = useRef();
+  const [modeUI, setModeUI] = useState();
   const modelRef = useRef(null);
   const interactableMeshes = useRef([]);
   const refImportAddModel = useRef();
@@ -560,6 +563,22 @@ const initFunc = forwardRef((props, ref) => {
   useTrackMouse3D(containerRef, cameraRef.current, (pos) => {
     setMousePos3D(pos);
   });
+
+  useEffect(() => {
+    const scene = sceneRef.current;
+    // Vẽ các box
+    const boxes = mergeWallsT
+    for (const box of boxes) {
+      const geometry = new THREE.BoxGeometry(box.width, box.height, box.depth);
+      const material = new THREE.MeshStandardMaterial({ color: 0x8888ff, roughness: 0.7, metalness: 0.0 });
+      const mesh = new THREE.Mesh(geometry, material);
+
+      // Đặt vị trí: y = height/2 để tường đứng trên mặt đất
+      mesh.position.set(box.x, box.height / 2, box.z);
+
+      scene.add(mesh);
+    }
+  }, [mergeWallsT])
 
   useEffect(() => {
     if (
@@ -619,25 +638,6 @@ const initFunc = forwardRef((props, ref) => {
     // Thêm vào scene
     scene.add(cameraSphere);
 
-    // // Tạo mesh ví dụ
-    let createBox = [];
-    const boxGeo = new THREE.BoxGeometry(5, 5, 5);
-    for (let i = 0; i < 30; i++) {
-      const boxMat = new THREE.MeshStandardMaterial({ color: 0x0088ff });
-      const mesh = new THREE.Mesh(boxGeo, boxMat);
-      mesh.position.set(
-        Math.random() * 200 - 25 + gridSize[0] / 2,
-        Math.random() * 50 + 25,
-        Math.random() * 200 - 25 + gridSize[1] / 2
-      );
-      mesh.userData.selectable = true;
-      mesh.userData.SelectionBox = true;
-      mesh.isSelectionBox = true;
-      scene.add(mesh);
-      createBox.push(mesh);
-      // interactableMeshes.current.push(mesh);
-    }
-    console.log("scene tao xong", scene);
     // Renderer
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(sceneWidth, sceneHeight);
@@ -646,488 +646,7 @@ const initFunc = forwardRef((props, ref) => {
     containerRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // controls
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.set(gridSize[0] / 2, 0, gridSize[1] / 2);
-    controls.update();
-    controlsRef.current = controls;
-
-    // // Tạo div vùng chọn (selection rect)
-    // const selectionRect = document.createElement("div");
-    // selectionRect.style.position = "absolute";
-    // selectionRect.style.border = "1px dashed red";
-    // selectionRect.style.display = "none";
-    // selectionRect.style.pointerEvents = "none";
-    // containerRef.current.appendChild(selectionRect);
-    // selectionRectRef.current = selectionRect;
-
-    const selectionBoxT = new SelectionBox(camera, scene);
-    selectionRectRef.current = selectionBoxT;
-    const helperSelectionBoxT = new SelectionHelper(
-      renderer,
-      "selectBox-selected"
-    );
-    const offset = new THREE.Vector3();
-    const startMouse = new THREE.Vector2();
-    const startRotation = new THREE.Euler();
-    const startScale = new THREE.Vector3();
-    const plane = new THREE.Plane();
-    const raycaster = new THREE.Raycaster();
-    const mouse = new THREE.Vector2();
-
-    helperSelectionBoxT.enabled = false;
-    helperSelectionBoxT.element.style.display = "block";
-    selectionHelperRef.current = helperSelectionBoxT;
-    // suaoday
-    function onMouseDown(event) {
-      const rect = renderer.domElement.getBoundingClientRect();
-      if (isSelectingRect && isSelectingRect.current) {
-        // console.log("controls", controls);
-        controls.enabled = false;
-        // isSelecting = true;
-        selectionHelperRef.current.enabled = true;
-        // const scrollLeft1 = window.pageXOffset || document.documentElement.scrollLeft;
-        // const scrollTop2 = window.pageYOffset || document.documentElement.scrollTop;
-        // console.log(scrollLeft1,scrollTop2)
-        const rect = renderer.domElement.getBoundingClientRect();
-        const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-        selectionRectRef.current.startPoint.set(x, y, 0.5);
-        // const ndc = new THREE.Vector3(x, y, 0.5); // NDC: z = giữa near và far
-        // ndc.unproject(camera); // Chuyển sang world
-        // selectionRectRef.current.startPoint.set(ndc);
-        selectionHelperRef.current.element.style.borderColor = `green`;
-        // selectionHelperRef.current._onSelectStart(event);
-      } else {
-        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-        raycaster.setFromCamera(mouse, camera);
-
-        const intersects_scene = raycaster.intersectObjects(
-          sceneRef.current.children,
-          true
-        );
-        const intersects = intersects_scene.filter(
-          (obj) =>
-            obj.object &&
-            obj.object.userData &&
-            obj.object.userData.SelectionBox
-        );
-        console.log("intersects_scene", intersects_scene)
-        console.log("intersects", intersects)
-        if (intersects.length > 0) {
-          let pickedMesh;
-          if (
-            intersects[0].object.userData &&
-            intersects[0].object.userData.uuidTargetGroup
-          ) {
-            pickedMesh = intersects[0].object.userData.targetGroup;
-            // pickedMesh = sceneRef.current.getObjectByProperty('uuid', intersects[0].object.userData.uuidTargetGroup);
-            // console.log("pickedMesh group tim thay",_.cloneDeep(pickedMesh))
-          } else {
-            pickedMesh = intersects[0].object;
-          }
-          console.log("tim thay pickedMesh", pickedMesh)
-          selectedObjectRef.current = pickedMesh;
-
-          isMoveRotateScaleRef.current = true;
-          controls.enabled = false;
-
-          if (modeRef.current === "drag") {
-            const pivot = pickedMesh.userData.pivot || pickedMesh;
-            const worldPoint = new THREE.Vector3();
-            pivot.getWorldPosition(worldPoint);
-
-            const normal = new THREE.Vector3();
-            camera.getWorldDirection(normal);
-            plane.setFromNormalAndCoplanarPoint(normal, worldPoint);
-
-            const intersection = new THREE.Vector3();
-            if (raycaster.ray.intersectPlane(plane, intersection)) {
-              offset.copy(intersection).sub(worldPoint);
-            } else {
-              offset.set(0, 0, 0);
-            }
-          } else if (modeRef.current === "rotate") {
-            startMouse.set(event.clientX, event.clientY);
-            const pivot = pickedMesh.userData.pivot || pickedMesh;
-            startRotation.copy(pivot.rotation);
-          } else if (modeRef.current === "scale") {
-            startMouse.set(event.clientX, event.clientY);
-            const pivot = pickedMesh.userData.pivot || pickedMesh;
-            startScale.copy(pivot.scale);
-          }
-        } else {
-          selectedObjectRef.current = null;
-          console.log("vao day roi ha nenselectedObjectRef", selectedObjectRef);
-        }
-      }
-      // if (!event.shiftKey) {
-      //   isSelecting = false;
-      //   controls.enabled = true;
-      //   selectionHelperRef.current.enabled = false;
-      // } else {
-      //   // console.log("controls", controls);
-      //   controls.enabled = false;
-      //   isSelecting = true;
-      //   selectionHelperRef.current.enabled = true;
-      //   const rect = renderer.domElement.getBoundingClientRect();
-      //   // const scrollLeft1 = window.pageXOffset || document.documentElement.scrollLeft;
-      //   // const scrollTop2 = window.pageYOffset || document.documentElement.scrollTop;
-      //   // console.log(scrollLeft1,scrollTop2)
-      //   const mouseX = event.clientX - rect.left;
-      //   const mouseY = event.clientY - rect.top;
-      //   // const mouseX = event.clientX - rect.left ;
-      //   // const mouseY = event.clientY - rect.top ;
-      //   const x = (mouseX / rect.width) * 2 - 1;
-      //   const y = -(mouseY / rect.height) * 2 + 1;
-
-      //   selectionRectRef.current.startPoint.set(x, y, 0.5);
-      //   console.log("mouseDown", selectionRectRef.current);
-      //   // selectionHelperRef.current._onSelectStart(event);
-      // }
-    }
-    function onMouseMove(event) {
-      if (!isSelectingRect && isSelectingRect.current) {
-        // selectionHelperRef.current._onSelectMove(event);
-        const rect = renderer.domElement.getBoundingClientRect();
-        const mouseX = event.clientX - rect.left;
-        const mouseY = event.clientY - rect.top;
-        const x = (mouseX / rect.width) * 2 - 1;
-        const y = -(mouseY / rect.height) * 2 + 1;
-        const selectionBox = selectionRectRef.current;
-        // selectionBox.endPoint.set(x, y, 0.5);
-        selectionRectRef.current.endPoint.set(x, y, 0.5);
-        // const ndc = new THREE.Vector3(x, y, 0.5); // NDC: z = giữa near và far
-        // ndc.unproject(camera); // Chuyển sang world
-        // selectionBox.endPoint.set(ndc);
-      } else {
-        if (
-          !isMoveRotateScaleRef ||
-          !isMoveRotateScaleRef.current ||
-          !selectedObjectRef.current
-        )
-          return;
-        console.log("vao mousemove di chuyen group nay", selectedObjectRef);
-        const rect = renderer.domElement.getBoundingClientRect();
-        mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-        mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-        const obj = selectedObjectRef.current;
-
-        if (modeRef.current === "drag") {
-          raycaster.setFromCamera(mouse, camera);
-          const intersection = new THREE.Vector3();
-          if (raycaster.ray.intersectPlane(plane, intersection)) {
-            const pivot = obj.userData.pivot || obj;
-            const newPos = intersection.clone().sub(offset);
-            if (pivot.parent) {
-              pivot.position.copy(pivot.parent.worldToLocal(newPos));
-            } else {
-              pivot.position.copy(newPos);
-            }
-          }
-        } else if (modeRef.current === "rotate") {
-          // const deltaX = event.clientX - startMouse.x;
-          // const deltaY = event.clientY - startMouse.y;
-          // if (onlyMoveOnOXZRef && onlyMoveOnOXZRef.current) {
-          //   obj.rotation.set(
-          //     startRotation.x,
-          //     startRotation.y + deltaX * 0.01,
-          //     startRotation.z
-          //   );
-          // } else {
-          //   obj.rotation.y = startRotation.y + deltaX * 0.01;
-          //   obj.rotation.x = startRotation.x + deltaY * 0.01;
-          // }
-          const pivot = obj.userData.pivot || obj;
-          const deltaX = event.clientX - startMouse.x;
-          const deltaY = event.clientY - startMouse.y;
-
-          const rotateSpeed = 0.005;
-
-          // Xoay quanh trục Y khi kéo ngang
-          pivot.rotation.y = startRotation.y + deltaX * rotateSpeed;
-
-          // Xoay quanh trục X khi kéo dọc
-          pivot.rotation.x = startRotation.x + deltaY * rotateSpeed;
-
-          // pivot.rotation.z = startRotation.z + deltaX * rotateSpeed;
-        } else if (modeRef.current === "scale") {
-          const pivot = obj.userData.pivot || obj;
-          const delta = event.clientY - startMouse.y;
-          const scaleFactor = Math.max(0.1, startScale.x + delta * 0.01); // scale không nhỏ hơn 0.1
-          pivot.scale.set(scaleFactor, scaleFactor, scaleFactor);
-
-          // const delta = event.clientY - startMouse.y;
-          // const newScale = Math.max(0.1, startScale.x + delta * 0.01);
-          // obj.scale.set(newScale, newScale, newScale);
-        }
-      }
-    }
-    function onMouseUp(event) {
-      console.log("onMouseUp", sceneRef.current);
-      if (isMoveRotateScaleRef && isMoveRotateScaleRef.current) {
-        isMoveRotateScaleRef.current = false;
-        // selectedObjectRef.current = null;  // BỎ DÒNG NÀY đi
-        controls.enabled = true;
-      }
-      if (isSelectingRect && isSelectingRect.current) {
-        //   if (isSelecting) {
-        //   isSelecting = false;
-        //   // selectedObjectRef.current = null;  // BỎ DÒNG NÀY đi
-        //   controls.enabled = true;
-        // }
-        console.log("quét xong roi");
-
-        //   // selectionHelperRef.current._onSelectOver(); // ẩn khung chọn
-
-        const rect = renderer.domElement.getBoundingClientRect();
-        const mouseX = event.clientX - rect.left;
-        const mouseY = event.clientY - rect.top;
-        const x = (mouseX / rect.width) * 2 - 1;
-        const y = -(mouseY / rect.height) * 2 + 1;
-        const selectionBox = selectionRectRef.current;
-        // selectionBox.endPoint.set(x, y, 0.5);
-        selectionRectRef.current.endPoint.set(x, y, 0.5);
-        // const ndc = new THREE.Vector3(x, y, 0.5); // NDC: z = giữa near và far
-        // ndc.unproject(camera); // Chuyển sang world
-        // selectionBox.endPoint.set(ndc);
-        console.log("selectionBox cloneDeep", _.cloneDeep(selectionBox));
-        const allSelected = selectionBox.select();
-        console.log("allSelected", allSelected);
-        const filterAllSelected = allSelected.filter(
-          (obj) => obj.userData && obj.userData.SelectionBox
-        );
-        console.log("filterAllSelected", filterAllSelected);
-        setArrayObjectSelected(filterAllSelected);
-      }
-    }
-    console.log("tao on mouse 1111111111111111");
-    renderer.domElement.addEventListener("mousedown", onMouseDown);
-    renderer.domElement.addEventListener("mousemove", onMouseMove);
-    renderer.domElement.addEventListener("mouseup", onMouseUp);
-    console.log("vao day khai bao chua");
-    window.addEventListener("keydown", (event) => {
-      pressedKeys.current.add(event.key);
-
-      // ✅ Chỉ bật nếu duy nhất 1 phím và là Shift
-      if (pressedKeys.current.size === 1 && pressedKeys.current.has("Shift")) {
-        isSelectingRect.current = true;
-        controls.enabled = false;
-        if (
-          selectionHelperRef &&
-          selectionHelperRef.current &&
-          !selectionHelperRef.current.enabled
-        ) {
-          selectionHelperRef.current.enabled = true;
-          selectionHelperRef.current.element.style.display = "block";
-        }
-      } else {
-        isSelectingRect.current = false;
-        controls.enabled = true;
-        if (selectionHelperRef.current) {
-          selectionHelperRef.current.enabled = false;
-          selectionHelperRef.current.element.style.display = "none";
-          selectionHelperRef.current.element.style.width = 0;
-          selectionHelperRef.current.element.style.height = 0;
-        }
-        if (selectionRectRef && selectionRectRef.current) {
-          selectionRectRef.current.startPoint.set(0, 0, 0);
-          selectionRectRef.current.endPoint.set(0, 0, 0);
-          selectionRectRef.current.collection = [];
-        }
-
-        console.log(
-          "❌ Không hợp lệ (đồng thời nhiều phím hoặc không phải Shift)"
-        );
-      }
-    });
-
-    window.addEventListener("keyup", (event) => {
-      pressedKeys.current.delete(event.key);
-
-      // Nếu bỏ Shift → tắt luôn
-      if (event.key === "Shift") {
-        isSelectingRect.current = false;
-        controls.enabled = true;
-        if (selectionHelperRef.current) {
-          selectionHelperRef.current.enabled = false;
-          selectionHelperRef.current.element.style.display = "none";
-          selectionHelperRef.current.element.style.width = 0;
-          selectionHelperRef.current.element.style.height = 0;
-        }
-        if (selectionRectRef && selectionRectRef.current) {
-          selectionRectRef.current.startPoint.set(0, 0, 0);
-          selectionRectRef.current.endPoint.set(0, 0, 0);
-          selectionRectRef.current.collection = [];
-        }
-        console.log("🛑 Thả Shift → tắt chế độ quét");
-      }
-    });
-    console.log("scene init", scene);
-    //     scene.children.forEach((child) => {
-    //   if (child.userData.SelectionBox) {
-    //     console.log("🎯 Tìm thấy mesh có SelectionBox:", child);
-    //   }
-    // });
-    // Animation loop
-    const animate = () => {
-      requestAnimationFrame(animate);
-      controls.update();
-
-      // Cập nhật bounding box vị trí theo group
-      try {
-        // console.log("animatesimulatedMesh", simulatedMesh);
-        // if (simulatedMesh.current.userData.bboxMesh) {
-        //   const bboxMesh = simulatedMesh.current.userData.bboxMesh;
-        //   // Nếu bboxMesh chưa phải là con của simulatedMesh, add vào
-        //   if (bboxMesh.parent !== simulatedMesh.current) {
-        //     simulatedMesh.current.add(bboxMesh);
-        //   }
-        // }
-        // if (simulatedMesh.current.userData.bboxMesh) {
-        //   const box = new THREE.Box3().setFromObject(simulatedMesh.current);
-        //   const size = new THREE.Vector3();
-        //   box.getSize(size);
-        //   const center = new THREE.Vector3();
-        //   box.getCenter(center);
-        //   const bboxMesh = simulatedMesh.current.userData.bboxMesh;
-        //   bboxMesh.position.copy(center);
-        //   bboxMesh.scale.set(
-        //     size.x / bboxMesh.geometry.parameters.width,
-        //     size.y / bboxMesh.geometry.parameters.height,
-        //     size.z / bboxMesh.geometry.parameters.depth
-        //   );
-        // }
-      } catch { }
-
-      renderer.render(scene, camera);
-    };
-    animate();
-    return () => {
-      // createBox.forEach((m) => {
-      //   scene.remove(m);
-      //   m.geometry.dispose();
-      //   m.material.dispose();
-      // });
-    };
   }, []);
-  const selectedGroupRefOld = usePrevious(arrayObjectSelected);
-  // useEffect(() => {
-  //   console.log("watch selectedGroupRefOld", selectedGroupRefOld);
-  // }, [selectedGroupRefOld]);
-
-  useEffect(() => {
-    // suaoday
-    console.log("watch arrayObjectSelected", arrayObjectSelected);
-
-    const scene = sceneRef.current;
-    if (!scene) return;
-
-    // // Xóa group cũ và trả các mesh về scene
-    // if (selectedGroupRef.current) {
-    //   selectedGroupRef.current.children.forEach(child => {
-    //     if (child.isMesh) {
-    //       scene.add(child);
-    //     }
-    //   });
-    //   scene.remove(selectedGroupRef.current);
-    //   selectedGroupRef.current = null;
-    // }
-    if (selectedGroupRefOld && selectedGroupRefOld.length) {
-      selectedGroupRefOld.forEach((mesh) => {
-        // selectedGroup.remove(mesh);
-        // scene.add(mesh);
-        try {
-          mesh.userData.isChildGroup = null;
-          mesh.userData.targetGroup = null;
-          mesh.userData.uuidTargetGroup = null;
-        } catch { }
-        scene.attach(mesh);
-      });
-    }
-
-    if (!arrayObjectSelected || arrayObjectSelected.length === 0) {
-      return;
-    }
-
-    // Tạo group mới và thêm mesh đã chọn vào
-    const selectedGroup = new THREE.Group();
-    // const selectedGroup = simulatedMesh.current
-    arrayObjectSelected.forEach((mesh) => {
-      // scene.remove(mesh);
-      // selectedGroup.add(mesh);
-
-      mesh.userData.isChildGroup = true;
-      mesh.userData.targetGroup = selectedGroup;
-      mesh.userData.uuidTargetGroup = selectedGroup.uuid;
-      selectedGroup.attach(mesh);
-    });
-
-    // Tạo bounding box cho group
-    // const bboxHelper = new THREE.BoxHelper(selectedGroup, "yellow");
-    // selectedGroup.add(bboxHelper);
-
-    // scene.add(selectedGroup);
-    // tạo 1 mesh là boudingbox cua group de co the dung quet duoc mesh nay tim lai group cha
-    const box = new THREE.Box3().setFromObject(selectedGroup);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
-    const mat = new THREE.MeshBasicMaterial({
-      color: "blue",
-      wireframe: true,
-    });
-    const bboxMesh = new THREE.Mesh(geo, mat);
-    bboxMesh.position.copy(center);
-    bboxMesh.userData.isBBox = true;
-    bboxMesh.userData.selectable = true;
-    bboxMesh.userData.SelectionBox = true;
-    bboxMesh.userData.targetGroup = selectedGroup;
-    bboxMesh.userData.uuidTargetGroup = selectedGroup.uuid;
-    selectedGroup.userData.bboxMesh = bboxMesh;
-    scene.add(bboxMesh);
-    simulatedMesh.current = selectedGroup;
-
-    // --- THÊM ĐOẠN NÀY: TẠO PIVOT ---
-    const pivot = new THREE.Object3D();
-    pivot.position.copy(center); // tâm group
-    scene.add(pivot);
-    pivot.add(simulatedMesh.current);
-    simulatedMesh.current.position.sub(center); // giữ nguyên vị trí tương đối
-    // Gán pivot vào userData
-    simulatedMesh.current.userData.pivot = pivot;
-    if (bboxMesh.parent !== simulatedMesh.current) {
-      simulatedMesh.current.add(bboxMesh);
-    }
-    bboxMesh.userData.pivot = pivot; // để bắt sau này
-
-    console.log("khi thay doi group----------")
-    console.log("pivot=", pivot.uuid)
-    console.log("selectedGroup=", selectedGroup.uuid)
-    console.log("bboxMesh=", bboxMesh.uuid)
-    // Cleanup khi effect thay đổi hoặc component unmount
-    return () => {
-      // sau khi xoa thi xoa cai group di
-      // scene.remove(selectedGroup);
-      scene.remove(bboxMesh);
-      scene.remove(pivot);
-      // if (selectedGroupRef.current) {
-      //   selectedGroupRef.current.children.forEach(child => {
-      //     if (child.isMesh) {
-      //       scene.add(child);
-      //     }
-      //   });
-      //   scene.remove(selectedGroupRef.current);
-      //   selectedGroupRef.current = null;
-      // }
-    };
-  }, [arrayObjectSelected]);
 
   const [sceneRefBackground, setSceneRefBackground] = useColor("#fff");
   const handleClickOpen = () => {
@@ -1175,6 +694,467 @@ const initFunc = forwardRef((props, ref) => {
     }
   }, [sceneFloorColor]);
 
+  async function createFileFromUrl(url, filename, mimeType = 'application/octet-stream') {
+    const res = await fetch(url);
+    const blob = await res.blob();
+    return new File([blob], filename, { type: mimeType });
+  }
+  function createDoorFromModel(model, start, end, openDirection = 1, axisOrigin = 1, doorHeight = 50, deg = 0) {
+    // axis=1 => trục của model gốc bên trái, axis=0 => trục của model gốc bên phải
+    // 1. Tính khoảng cách và hướng
+    const dx = end.x - start.x;
+    const dz = end.z - start.z;
+    const targetWidth = Math.sqrt(dx * dx + dz * dz);
+
+    // 2. Lấy bounding box
+    const box = new THREE.Box3().setFromObject(model);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+
+    const modelWidth = Math.max(size.x, size.z);
+    const modelDepth = Math.min(size.x, size.z);
+
+    // 3. Scale đều
+
+    const scale = targetWidth / modelWidth;
+    const heightScale = doorHeight && size.y ? doorHeight / size.y : scale;
+    model.scale.set(scale, heightScale, scale);
+
+    // 4. Recalculate box sau scale
+    const scaledBox = new THREE.Box3().setFromObject(model);
+    const scaledSize = new THREE.Vector3();
+    scaledBox.getSize(scaledSize);
+
+    // 5. Nếu cần lật tay nắm
+    if (axisOrigin !== openDirection) {
+      if (size.x >= size.z) {
+        model.scale.x *= -1;
+        model.position.x *= -1;
+      } else {
+        model.scale.z *= -1;
+        model.position.z *= -1;
+      }
+    }
+    // 6. Tạo pivot tại điểm xoay
+    const pivotPoint = openDirection != 1 ? start : end;
+    const pivot = new THREE.Object3D();
+    pivot.position.set(pivotPoint.x, pivotPoint.y || 0, pivotPoint.z);
+
+    // 7. Đưa model về gốc (0,0,0) của pivot, mép trùng pivot
+    if (size.x >= size.z) {
+      // Model rộng theo X
+      const direction = openDirection != 1 ? 1 : -1;
+      model.position.set((scaledSize.x / 2) * direction, scaledSize.y / 2, 0);
+    } else {
+      // Model rộng theo Z
+      const direction = openDirection != 1 ? 1 : -1;
+      model.position.set(0, scaledSize.y / 2, (scaledSize.z / 2) * direction);
+    }
+
+    if (deg) {
+      pivot.rotation.y = deg;
+    }
+
+    // 8. Lưu pivot vào userData để xoay về sau
+    model.userData.pivot = pivot;
+    console.log("model da add pivot vao roi ma nhi model=", model)
+    pivot.add(model);
+
+    return { pivot, model };
+  }
+
+  function findPivotFromMesh(mesh) {
+    let obj = mesh;
+    while (obj) {
+      if (obj.userData.pivot) return obj.userData.pivot;
+      obj = obj.parent;
+    }
+    return null; // không tìm thấy pivot
+  }
+
+  useEffect(() => {
+    console.log("watch model Name", modelName)
+    // return;
+    const scene = sceneRef.current;
+    if (modelName == 'model-30939153') {
+      // load ghe1,
+      try {
+        new Promise(async (resolve) => {
+          let path1 = '/models/source/door1.zip'
+          const file = await createFileFromUrl(path1, 'door1.zip');
+          if (!file) return;
+          let scaleModel = 0.5;
+          let scaleX_Model = 0.8,
+            scaleY_Model = 0.8,
+            scaleZ_Model = 0.8;
+          //  const scaleModel = 1
+          let fileName = file.name;
+          let typeFile = fileName.split(".").pop(); // 'txt'
+          if (typeFile == "glb") {
+            const loader = new GLTFLoader();
+            // Optional: DRACO support nếu file nén
+            const dracoLoader = new DRACOLoader();
+            dracoLoader.setDecoderPath("/js/libs/draco/");
+            loader.setDRACOLoader(dracoLoader);
+            const reader = new FileReader();
+            reader.onload = function (e) {
+              const arrayBuffer = e.target.result;
+              loader.parse(
+                arrayBuffer,
+                "",
+                (gltf) => {
+                  try {
+                    const model = gltf.scene;
+                    const box = new THREE.Box3().setFromObject(model);
+                    const size = new THREE.Vector3();
+                    let sizeX = 1,
+                      sizeY = 1,
+                      sizeZ = 1;
+                    const sizeBox = box.getSize(size); // size sẽ chứa width, height, depth
+                    if (sizeBox && sizeBox.x && sizeBox.y && sizeBox.z) {
+                      sizeX = sizeBox.x;
+                      sizeY = sizeBox.y;
+                      sizeZ = sizeBox.z;
+                      scaleX_Model = gridSize[0] / sizeX;
+                      scaleZ_Model = gridSize[1] / sizeZ;
+                      try {
+                        scaleModel = Math.min(scaleX_Model, scaleZ_Model);
+                      } catch { }
+                    }
+                    console.log("model222", _.cloneDeep(model))
+                    console.log("size=", size)
+                    console.log("sizeBox=", sizeBox)
+                    console.log("grid size hien tai", gridSize)
+                    console.log("wall heigh", wallHeight)
+                    model.traverse((child) => {
+                      if (child.isMesh) {
+                        child.castShadow = true;
+                        child.material.side = THREE.DoubleSide;
+                        interactableMeshes.current.push(child);
+                      }
+                    });
+
+                    // model.scale.set(0.001 * scaleModel, 0.001 * scaleModel, 0.001 * scaleModel);
+                    // model.scale.set(1 * scaleModel, 1 * scaleModel, 1 * scaleModel);
+                    model.scale.set(scaleModel, scaleModel, scaleModel);
+                    // console.log(`scaleX_Model=${scaleX_Model} scaleY_Model=${scaleY_Model} scaleZ_Model=${scaleZ_Model} scaleModel=${scaleModel}`)
+                    //  model.scale.set(sizeX, sizeX, sizeX);
+                    model.position.set(0, 0, 0);
+                    scene.add(model);
+                    // modelRef.current = model;
+                  } catch { }
+                  resolve();
+                },
+                (error) => {
+                  resolve();
+                  console.error("Lỗi khi parse GLB:", error);
+                }
+              );
+            };
+            reader.readAsArrayBuffer(file);
+          } else if (typeFile == "zip") {
+            try {
+              const zip = await JSZip.loadAsync(file);
+              // Tìm file scene.gltf trong zip
+              const gltfEntry = Object.values(zip.files).find((f) =>
+                f.name.endsWith(".gltf")
+              );
+              if (!gltfEntry) {
+                console.error("Không tìm thấy file .gltf trong zip");
+                return;
+              }
+
+              const gltfText = await gltfEntry.async("string");
+
+              // Tạo blob URLs cho resource phụ
+              const blobUrlMap = {};
+              await Promise.all(
+                Object.values(zip.files).map(async (file) => {
+                  const name = file.name;
+                  if (/\.(bin|png|jpg|jpeg|gif|tga|ktx2|txt)$/i.test(name)) {
+                    const blob = await file.async("blob");
+                    blobUrlMap[name] = URL.createObjectURL(blob);
+                  }
+                })
+              );
+
+              // ✅ Tạo manager và setURLModifier
+              const manager = new THREE.LoadingManager();
+              manager.setURLModifier((url) => {
+                const normalized = url.replace(/^(\.\/|\/)/, ''); // fix đường dẫn có ./ hoặc /
+                return blobUrlMap[normalized] || url;
+              });
+
+              // ✅ Truyền manager vào loader
+              const loader = new GLTFLoader(manager);
+
+              // Optional: DRACO support nếu cần
+              const dracoLoader = new DRACOLoader();
+              dracoLoader.setDecoderPath("/js/libs/draco/");
+              loader.setDRACOLoader(dracoLoader);
+
+              // Load từ gltfText
+              const gltf = await loader.parseAsync(gltfText, ""); // path rỗng vì bạn dùng blob
+              try {
+                const model = gltf.scene;
+                const box = new THREE.Box3().setFromObject(model);
+                const size = new THREE.Vector3();
+                let sizeX = 1,
+                  sizeY = 1,
+                  sizeZ = 1;
+                const sizeBox = box.getSize(size); // size sẽ chứa width, height, depth
+                model.traverse((child) => {
+                  if (child.isMesh) {
+                    child.castShadow = true;
+                    child.material.side = THREE.DoubleSide;
+                    interactableMeshes.current.push(child);
+                  }
+                });
+                // const model1 = model.clone()
+                // model1.scale.set(scaleModel, scaleModel, scaleModel);
+                // // model1.scale.x *= -1;
+                // model1.scale.z *= -1;
+                // model1.updateMatrixWorld(true);
+                // // // ✅ Tính bounding box sau khi scale
+                // const box2 = new THREE.Box3().setFromObject(model1);
+                // const min2 = box2.min;
+                // model1.position.set(40, -min2.y, 445);
+                // scene.add(model1);
+                // // const boxHelper1 = new THREE.BoxHelper(model1, 'red'); // màu vàng
+                // // scene.add(boxHelper1);
+
+                const doorHeight = 50
+                let model1 = model.clone()
+                let door1 = createDoorFromModel(model1, { x: 40, y: 0, z: 420 }, { x: 42, y: 0, z: 472 }, 1, 1, doorHeight)
+                if (door1 && door1.model) {
+                  const model1 = door1.model
+                  const pivotmodel1 = door1.pivot
+                  interactableMeshes.current.push(model1)
+                  scene.add(pivotmodel1);
+                }
+
+                let model2 = model.clone()
+                let door2 = createDoorFromModel(model2, { x: 40, y: 0, z: 330 }, { x: 40, y: 0, z: 380 }, 1, 1, doorHeight)
+                if (door2 && door2.model) {
+                  const model2 = door2.model
+                  const pivotmodel2 = door2.pivot
+                  interactableMeshes.current.push(model2)
+                  // console.log("da add interactableMeshes2", interactableMeshes)
+                  // console.log("scenescene", scene)
+                  // console.log("model2", model2)
+                  // console.log("pivotmodel2", pivotmodel2)
+                  // scene.add(model2)
+                  scene.add(pivotmodel2);
+                  // const pivotMarker = new THREE.Mesh(
+                  //   new THREE.BoxGeometry(2, 10, 2), // Kích thước nhỏ dễ nhìn
+                  //   new THREE.MeshBasicMaterial({ color: 'red' }) // Màu đỏ nổi bật
+                  // );
+                  // pivotMarker.position.copy(door2.pivot.position); // Đặt đúng vị trí pivot
+                  // scene.add(pivotMarker);
+                  // const boxHelper1 = new THREE.BoxHelper(model2, 'red'); // màu vàng
+                  // scene.add(boxHelper1);
+                }
+
+                let model3 = model.clone()
+                let door3 = createDoorFromModel(model3, { x: 40, y: 0, z: 117 }, { x: 40, y: 0, z: 164 }, 0, 1, doorHeight)
+                if (door3 && door3.model) {
+                  const model3 = door3.model
+                  const pivotmodel3 = door3.pivot
+                  interactableMeshes.current.push(model3)
+                  scene.add(pivotmodel3);
+                }
+
+                let model4 = model.clone()
+                let door4 = createDoorFromModel(model4, { x: 370, y: 0, z: 357 }, { x: 370, y: 0, z: 408 }, 1, 1, doorHeight)
+                if (door4 && door4.model) {
+                  const model4 = door4.model
+                  const pivotmodel4 = door4.pivot
+                  interactableMeshes.current.push(model4)
+                  scene.add(pivotmodel4);
+                }
+
+                let model5 = model.clone()
+                let door5 = createDoorFromModel(model5, { x: 370, y: 0, z: 243 }, { x: 370, y: 0, z: 279 }, 1, 1, doorHeight)
+                if (door5 && door5.model) {
+                  const model5 = door5.model
+                  const pivotmodel5 = door5.pivot
+                  interactableMeshes.current.push(model5)
+                  scene.add(pivotmodel5);
+                }
+
+                let model6 = model.clone()
+                let door6 = createDoorFromModel(model6, { x: 370, y: 0, z: 176 }, { x: 370, y: 0, z: 225 }, 1, 1, doorHeight)
+                if (door6 && door6.model) {
+                  const model6 = door6.model
+                  const pivotmodel6 = door6.pivot
+                  interactableMeshes.current.push(model6)
+                  scene.add(pivotmodel6);
+                }
+                let model7 = model.clone()
+                let door7 = createDoorFromModel(model7, { x: 224, y: 0, z: 430 }, { x: 252, y: 0, z: 430 }, 1, 1, doorHeight, Math.PI / 2)
+                if (door7 && door7.model) {
+                  const model7 = door7.model
+                  const pivotmodel7 = door7.pivot
+                  interactableMeshes.current.push(model7)
+                  scene.add(pivotmodel7);
+                }
+
+              } catch (e) {
+                console.log(e)
+              }
+            } catch { }
+            resolve();
+          }
+        });
+      } catch { }
+    }
+
+    // Interaction variables
+    let isInteracting = false;
+    const offset = new THREE.Vector3();
+    const startMouse = new THREE.Vector2();
+    const startRotation = new THREE.Euler();
+    const startScale = new THREE.Vector3();
+    const plane = new THREE.Plane();
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+    function onMouseDown(event) {
+      console.log("mouse onMouseDown")
+      const rect = rendererRef.current.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      raycaster.setFromCamera(mouse, cameraRef.current);
+
+      const intersects = raycaster.intersectObjects(
+        interactableMeshes.current,
+        true
+      );
+      console.log("intersectsdrag", intersects)
+      console.log("interactableMeshesdơn", interactableMeshes)
+      if (intersects.length > 0) {
+        const pickedMesh = intersects[0].object;
+        selectedObjectRef.current = pickedMesh;
+        isInteracting = true;
+        controlsRef.current.enabled = false;
+
+        if (modeRef.current === "drag") {
+          const worldPoint = new THREE.Vector3();
+          pickedMesh.getWorldPosition(worldPoint);
+
+          plane.setFromNormalAndCoplanarPoint(
+            cameraRef.current.getWorldDirection(plane.normal),
+            worldPoint
+          );
+          offset.copy(intersects[0].point).sub(worldPoint);
+        } else if (modeRef.current === "rotate") {
+          startMouse.set(event.clientX, event.clientY);
+          const pivot = findPivotFromMesh(pickedMesh) || pickedMesh;
+          startRotation.copy(pivot.rotation);
+        } else if (modeRef.current === "scale") {
+          startMouse.set(event.clientX, event.clientY);
+          startScale.copy(pickedMesh.scale);
+        }
+      } else {
+        selectedObjectRef.current = null;
+      }
+    }
+
+    function onMouseMove(event) {
+      if (!isInteracting || !selectedObjectRef.current) return;
+
+      const rect = rendererRef.current.domElement.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      const obj = selectedObjectRef.current;
+
+      if (modeRef.current === "drag") {
+        raycaster.setFromCamera(mouse, cameraRef.current);
+        const intersection = new THREE.Vector3();
+        if (raycaster.ray.intersectPlane(plane, intersection)) {
+          const newWorldPos = intersection.sub(offset);
+          if (onlyMoveOnOXZRef && onlyMoveOnOXZRef.current) {
+            // Giữ nguyên trục Y hiện tại của object
+            newWorldPos.y = obj.getWorldPosition(new THREE.Vector3()).y;
+          }
+          if (obj.parent) {
+            obj.position.copy(obj.parent.worldToLocal(newWorldPos.clone()));
+          } else {
+            obj.position.copy(newWorldPos);
+          }
+        }
+      } else if (modeRef.current === "rotate") {
+        // const deltaX = event.clientX - startMouse.x;
+        // const deltaY = event.clientY - startMouse.y;
+        // if (onlyMoveOnOXZRef && onlyMoveOnOXZRef.current) {
+        //   obj.rotation.set(
+        //     startRotation.x,
+        //     startRotation.y + deltaX * 0.01,
+        //     startRotation.z
+        //   );
+        // } else {
+        //   obj.rotation.y = startRotation.y + deltaX * 0.01;
+        //   obj.rotation.x = startRotation.x + deltaY * 0.01;
+        // }
+        const pivot = findPivotFromMesh(obj) || obj;
+        const deltaX = event.clientX - startMouse.x;
+        const deltaY = event.clientY - startMouse.y;
+
+        const rotateSpeed = 0.005;
+        if (onlyMoveOnOXZRef && onlyMoveOnOXZRef.current) {
+          pivot.rotation.y = startRotation.y + deltaX * rotateSpeed;
+        } else {
+          // Xoay quanh trục Y khi kéo ngang
+          pivot.rotation.y = startRotation.y + deltaX * rotateSpeed;
+          // Xoay quanh trục X khi kéo dọc
+          pivot.rotation.x = startRotation.x + deltaY * rotateSpeed;
+        }
+
+      } else if (modeRef.current === "scale") {
+        const delta = event.clientY - startMouse.y;
+        const newScale = Math.max(0, startScale.x + delta * 0.01);
+        obj.scale.set(newScale, newScale, newScale);
+      }
+    }
+
+    function onMouseUp() {
+      if (isInteracting) {
+        isInteracting = false;
+        // selectedObjectRef.current = null;  // BỎ DÒNG NÀY đi
+        controlsRef.current.enabled = true;
+      }
+    }
+    rendererRef.current.domElement.addEventListener("mousedown", onMouseDown);
+    rendererRef.current.domElement.addEventListener("mousemove", onMouseMove);
+    rendererRef.current.domElement.addEventListener("mouseup", onMouseUp);
+
+    const handleResize = () => {
+      const sceneWidth = containerRef.current.clientWidth;
+      const sceneHeight = containerRef.current.clientHeight;
+      cameraRef.current.aspect = sceneWidth / sceneHeight;
+      cameraRef.current.updateProjectionMatrix();
+      rendererRef.current.setSize(sceneWidth, sceneHeight);
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    const animate = () => {
+      requestAnimationFrame(animate);
+      if (controlsRef && controlsRef.current) {
+        controlsRef.current.update();
+      }
+      if (rendererRef.current) {
+        rendererRef.current.render(sceneRef.current, cameraRef.current);
+      }
+
+    };
+    animate();
+    return () => {
+      rendererRef.current.domElement.removeEventListener("mousedown", onMouseDown);
+      rendererRef.current.domElement.removeEventListener("mousemove", onMouseMove);
+      rendererRef.current.domElement.removeEventListener("mouseup", onMouseUp);
+    }
+  }, [modelName])
   useEffect(() => {
     if (
       dataDeepFloorplan &&
@@ -1202,15 +1182,10 @@ const initFunc = forwardRef((props, ref) => {
           maxZ: findConsecutiveRangesT.maxZ,
         });
       }
-      console.log("dataDeepFloorplan.sizeImg=", dataDeepFloorplan.sizeImg)
-      console.log("dataDeepFloorplan.wall[0].points", dataDeepFloorplan.wall[0].points)
       let labels = createLabeledArray(dataDeepFloorplan.sizeImg, dataDeepFloorplan.wall[0].points)
       const findRectanglesT = findRectangles(labels)
-      console.log("findRectanglesT=", findRectanglesT)
-      console.log("wallThreejs=", wallThreejs)
-
-      setWallStore(wallThreejs);
       setWallStoreV2(findRectanglesT)
+      setWallStore(wallThreejs);
       setGridSize(dataDeepFloorplan.sizeImg);
     }
   }, [dataDeepFloorplan]);
@@ -1234,13 +1209,13 @@ const initFunc = forwardRef((props, ref) => {
     const renderer = rendererRef.current;
 
     // Controls
-    // const controls = new OrbitControls(camera, renderer.domElement);
-    // controls.target.set(gridSize[0] / 2, 0, gridSize[1] / 2);
-    // controls.update();
-    // controlsRef.current = controls;
-    const controls = controlsRef.current;
-    // controls.target.set(gridSize[0] / 2, 0, gridSize[1] / 2);
-    // // controls.update();
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.set(gridSize[0] / 2, 0, gridSize[1] / 2);
+    controls.update();
+    controlsRef.current = controls;
+    // const controls = controlsRef.current;
+    // // controls.target.set(gridSize[0] / 2, 0, gridSize[1] / 2);
+    // // // controls.update();
 
     // // Lights
     // const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -1983,9 +1958,8 @@ const initFunc = forwardRef((props, ref) => {
             // ✅ Tạo manager và setURLModifier
             const manager = new THREE.LoadingManager();
             manager.setURLModifier((url) => {
-              console.log("Đã intercept:", url);
-              const clean = url.split("/").pop();
-              return blobUrlMap[clean] || url;
+              const normalized = url.replace(/^(\.\/|\/)/, ''); // fix đường dẫn có ./ hoặc /
+              return blobUrlMap[normalized] || url;
             });
 
             // ✅ Truyền manager vào loader
@@ -2000,7 +1974,6 @@ const initFunc = forwardRef((props, ref) => {
             const gltf = await loader.parseAsync(gltfText, ""); // path rỗng vì bạn dùng blob
             try {
               const model = gltf.scene;
-              console.log("model", model);
               const box = new THREE.Box3().setFromObject(model);
               const size = new THREE.Vector3();
               let sizeX = 1,
@@ -2097,7 +2070,7 @@ const initFunc = forwardRef((props, ref) => {
         const rect = renderer.domElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
+        console.log("position=", mouse)
         const obj = selectedObjectRef.current;
 
         if (modeRef.current === "drag") {
@@ -2130,7 +2103,8 @@ const initFunc = forwardRef((props, ref) => {
           }
         } else if (modeRef.current === "scale") {
           const delta = event.clientY - startMouse.y;
-          const newScale = Math.max(0.1, startScale.x + delta * 0.01);
+          const newScale = Math.max(0, startScale.x + delta * 0.01);
+          console.log("newScale=", newScale)
           obj.scale.set(newScale, newScale, newScale);
         }
       }
@@ -2337,6 +2311,7 @@ const initFunc = forwardRef((props, ref) => {
     const handleResize = () => {
       const width = mountRef.current.clientWidth;
       const height = mountRef.current.clientHeight;
+      console.log("vao day roi nay");
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height);
