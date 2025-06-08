@@ -1,6 +1,6 @@
 // FloorplanViewer.tsx
-import { useSelector, useDispatch } from 'react-redux';
-import { modelThreejsActions } from '../store/modelThreejs.js';
+import { useSelector, useDispatch } from "react-redux";
+import { modelThreejsActions } from "../store/modelThreejs.js";
 // import { setSelectedModel } from './store/modelThreejs';
 import React, {
   useEffect,
@@ -12,16 +12,19 @@ import React, {
 import * as THREE from "three";
 import _, { isBuffer } from "lodash";
 import * as CANNON from "cannon-es";
+import CannonDebugger from "cannon-es-debugger";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 // import { SelectionBox } from "three/examples/jsm/interactive/SelectionBox.js";
 // import { SelectionHelper } from "three/examples/jsm/interactive/SelectionHelper.js";
-import SelectionBox from '../utils/SelectionBoxExtended.js';
+import SelectionBox from "../utils/SelectionBoxExtended.js";
 import SelectionHelper from "../utils/SelectionHelperOffset.js"; // SelectionHelper đã custom để nhận đúng vị trí khi có offset của window
 import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader"; // Nếu dùng nén
 import { RectAreaLightHelper } from "three/examples/jsm/helpers/RectAreaLightHelper.js";
+import CustomMesh from "../utils/CustomMesh.js"; // ✅ đúng
+import CustomGroup from "../utils/CustomGroup.js"; // ✅ đúng
 import {
   Dialog,
   Switch,
@@ -43,7 +46,7 @@ import { GUI } from "three/examples/jsm/libs/lil-gui.module.min.js";
 import "react-color-palette/css";
 import JSZip from "jszip";
 import { ModelNode } from "three/webgpu";
-import { gapSize } from 'three/tsl';
+import { gapSize } from "three/tsl";
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & {
@@ -54,9 +57,8 @@ const Transition = React.forwardRef(function Transition(
   return <Slide direction="down" ref={ref} {...props} />;
 });
 
-
 function mergeMeshesToSingleGeometry(groups) {
-  if (!groups) return
+  if (!groups) return;
   const meshSet = new Set();
   groups.traverse((child) => {
     if (child.isMesh && !meshSet.has(child)) {
@@ -65,7 +67,7 @@ function mergeMeshesToSingleGeometry(groups) {
   });
   const meshes = Array.from(meshSet);
   let geometries = [];
-  meshes.map(mesh => {
+  meshes.map((mesh) => {
     if (mesh.isMesh && mesh.geometry && mesh.geometry.attributes.position) {
       const geom = mesh.geometry.clone();
       geom.applyMatrix4(mesh.matrixWorld); // đảm bảo vị trí đúng trong world
@@ -90,9 +92,21 @@ function geometryToConvexPolyhedron(bufferGeometry) {
   for (let i = 0; i < count; i += 3) {
     // Gộp luôn 3 đỉnh cho mỗi mặt tam giác
     const i0 = vertices.length;
-    const v0 = new CANNON.Vec3(posAttr.getX(i), posAttr.getY(i), posAttr.getZ(i));
-    const v1 = new CANNON.Vec3(posAttr.getX(i + 1), posAttr.getY(i + 1), posAttr.getZ(i + 1));
-    const v2 = new CANNON.Vec3(posAttr.getX(i + 2), posAttr.getY(i + 2), posAttr.getZ(i + 2));
+    const v0 = new CANNON.Vec3(
+      posAttr.getX(i),
+      posAttr.getY(i),
+      posAttr.getZ(i)
+    );
+    const v1 = new CANNON.Vec3(
+      posAttr.getX(i + 1),
+      posAttr.getY(i + 1),
+      posAttr.getZ(i + 1)
+    );
+    const v2 = new CANNON.Vec3(
+      posAttr.getX(i + 2),
+      posAttr.getY(i + 2),
+      posAttr.getZ(i + 2)
+    );
 
     vertices.push(v0, v1, v2);
 
@@ -110,7 +124,6 @@ function geometryToConvexPolyhedron(bufferGeometry) {
 
   return new CANNON.ConvexPolyhedron({ vertices, faces });
 }
-
 
 function uniquePointsWithMinMax(points) {
   const seen = new Set();
@@ -322,8 +335,8 @@ function findRectangles(matrix, labelAs = 1) {
 }
 
 function createLabeledArray(size, indices, label = 1) {
-  const m = size[1]
-  const n = size[0]
+  const m = size[1];
+  const n = size[0];
 
   // Khởi tạo mảng 2 chiều toàn , m cot n hang
   const array = Array.from({ length: m }, () => Array(n).fill(0));
@@ -455,16 +468,16 @@ function Wall2({
   mesh.receiveShadow = true;
 
   // Đặt tâm khối box vào giữa vùng phủ của tường (bao gồm cả dày)
-  mesh.position.set(
-    x + xWidth / 2,
-    height / 2,
-    z + zWidth / 2
-  );
+  mesh.position.set(x + xWidth / 2, height / 2, z + zWidth / 2);
 
   // Cập nhật chiều cao
   mesh.updateHeight = (newHeight) => {
     const oldHeight = mesh.geometry.parameters.height;
-    const newGeometry = new THREE.BoxGeometry(actualWidth, newHeight, actualDepth);
+    const newGeometry = new THREE.BoxGeometry(
+      actualWidth,
+      newHeight,
+      actualDepth
+    );
     mesh.geometry.dispose();
     mesh.geometry = newGeometry;
     mesh.position.y += (newHeight - oldHeight) / 2;
@@ -480,8 +493,6 @@ function Wall2({
   scene.add(mesh);
   return mesh;
 }
-
-
 
 function CustomGrid({
   width = 10,
@@ -536,20 +547,23 @@ function usePrevious(value) {
 function createGeometryFromTrimesh(trimesh) {
   const geometry = new THREE.BufferGeometry();
 
-  // vertices của trimesh
+  // Set vị trí
   geometry.setAttribute(
-    'position',
+    "position",
     new THREE.BufferAttribute(new Float32Array(trimesh.vertices), 3)
   );
 
-  // chỉ số index
-  geometry.setIndex(trimesh.indices);
+  // Set chỉ số mặt tam giác (index)
+  const indexArray = new (
+    trimesh.indices.length > 65535 ? Uint32Array : Uint16Array
+  )(trimesh.indices);
+  geometry.setIndex(new THREE.BufferAttribute(indexArray, 1));
 
-  // tính mặt bình thường để render đẹp hơn (nếu dùng mesh)
   geometry.computeVertexNormals();
 
   return geometry;
 }
+
 function centerGeometryKeepY(geometry) {
   geometry.computeBoundingBox();
   const box = geometry.boundingBox;
@@ -562,25 +576,56 @@ function centerGeometryKeepY(geometry) {
   // Trả về offset mà helper cần cộng, Y giữ 0
   return new THREE.Vector3(center.x, 0, center.z);
 }
+function startRandomBoxMovement(boxes, gridSize, step = 1) {
+  const intervalId = setInterval(() => {
+    boxes.forEach((box) => {
+      const axis = Math.random() > 0.5 ? "x" : "z";
+      const sign = Math.random() > 0.5 ? 1 : -1;
+
+      const currentPos = box.position.clone();
+      let newValue = currentPos[axis] + step * sign;
+
+      if (newValue < 0 || newValue > gridSize) {
+        // Nếu vượt biên thì quay đầu lại
+        newValue = THREE.MathUtils.clamp(
+          currentPos[axis] - step * sign,
+          0,
+          gridSize
+        );
+      }
+
+      // Set lại bằng .set để đảm bảo trigger các transform watcher
+      if (axis === "x") {
+        box.position.set(newValue, currentPos.y, currentPos.z);
+      } else {
+        box.position.set(currentPos.x, currentPos.y, newValue);
+      }
+    });
+  }, 500);
+
+  return intervalId;
+}
+
+
 // export default function FloorplanViewer({ dataDeepFloorplan, wallHeight }) {
 const initFunc = forwardRef((props, ref) => {
   const dispatch = useDispatch();
-  const modelThreeCommon = useSelector(state => state.modelThreejs.models);
-  const modelThreeCommonRef = useRef({})
-  useEffect(() => {
-    console.log("watch modelThreeCommon", modelThreeCommon)
-  }, [modelThreeCommon])
-  const arrHelperUpdate = useRef([])
+  const dovatdichuyen = useRef([]);
+  const arrBox3HelperAutoUpdate = useRef([]);
+  const modelThreeCommon = useSelector((state) => state.modelThreejs.models);
+  const modelThreeCommonRef = useRef({});
+  useEffect(() => {}, [modelThreeCommon]);
+  const arrHelperUpdate = useRef([]);
   const clockCannonRef = useRef();
   const worldCannonRef = useRef();
   const { dataDeepFloorplan, wallHeight, modelName, mergeWallsT } = props;
-  const [splitGroup, setsplitGroup] = useState(false)
+  const [splitGroup, setsplitGroup] = useState(false);
   const containerRef = useRef(null);
   const [mousePos3D, setMousePos3D] = useState(new THREE.Vector3());
   const [gridSize, setGridSize] = useState([400, 400]);
   const [useGroup, setUseGroup] = useState(true);
   const useGroupRef = useRef(useGroup);
-  const arrUuidBoxMeshGroup = useRef([])
+  const arrUuidBoxMeshGroup = useRef([]);
   // cameraPosition: lúc đầu hiểu là như thê nhưng k đúng, hiểu đúng nó chỉ là tâm của trục xoay tại vị trí này thôi
   const [cameraPosition, setCameraPosition] = useState([
     gridSize[0],
@@ -589,7 +634,7 @@ const initFunc = forwardRef((props, ref) => {
   ]);
   const [checkMoveOXZ, setCheckMoveOXZ] = useState(true);
   const onlyMoveOnOXZRef = useRef(checkMoveOXZ);
-  const [wallStoreV2, setWallStoreV2] = useState([])
+  const [wallStoreV2, setWallStoreV2] = useState([]);
   const [wallStore, setWallStore] = useState([
     // { start: [0, 90], end: [0, 100] },
     // { start: [0, 200], end: [200, 0] },
@@ -639,10 +684,11 @@ const initFunc = forwardRef((props, ref) => {
   const selectedObjectRef = useRef(null);
   const isMoveRotateScaleRef = useRef(false);
   const simulatedMesh = useRef(new THREE.Group());
+  const useTransformFromHand = useRef(false);
 
   // phần ui
   const [open, setOpen] = React.useState(false);
-  const splitGroupRef = useRef(false)
+  const splitGroupRef = useRef(false);
   function getAllUniqueMeshes(object3D) {
     const uniqueMeshes = new Set();
     if (!object3D) return;
@@ -677,15 +723,13 @@ const initFunc = forwardRef((props, ref) => {
     // Tính kích thước thật khi vẽ Box
     const actualWidth = xWidth + thickness * 2;
     const actualDepth = zWidth + thickness * 2;
-    let physicsWorld = word
+    let physicsWorld = word;
     if (!physicsWorld && worldCannonRef && worldCannonRef.current) {
       physicsWorld = worldCannonRef.current;
     }
 
     // Không render nếu kích thước quá nhỏ
     if (actualWidth <= 0 || actualDepth <= 0) return null;
-
-
 
     // Chú ý: chiều dài = actualWidth, chiều rộng = actualDepth
     const shape = new THREE.Shape();
@@ -697,7 +741,7 @@ const initFunc = forwardRef((props, ref) => {
 
     const extrudeSettings = {
       steps: 1,
-      depth: height,  // chiều cao thực tế
+      depth: height, // chiều cao thực tế
       bevelEnabled: false,
     };
 
@@ -721,11 +765,13 @@ const initFunc = forwardRef((props, ref) => {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
 
-
     // Tạo wireframe geometry và line segments
     const wireframeGeometry = new THREE.WireframeGeometry(geometry);
-    const wireframeMaterial = new THREE.LineBasicMaterial({ color: '#ffffff' });
-    const wireframe = new THREE.LineSegments(wireframeGeometry, wireframeMaterial);
+    const wireframeMaterial = new THREE.LineBasicMaterial({ color: "#ffffff" });
+    const wireframe = new THREE.LineSegments(
+      wireframeGeometry,
+      wireframeMaterial
+    );
 
     // Đồng bộ vị trí, xoay, scale wireframe với mesh
     wireframe.position.copy(mesh.position);
@@ -735,14 +781,14 @@ const initFunc = forwardRef((props, ref) => {
     // mesh.add(wireframe);
 
     // Đặt tâm khối box vào giữa vùng phủ của tường (bao gồm cả dày)
-    mesh.position.set(
-      x + xWidth / 2,
-      height / 2,
-      z + zWidth / 2
-    );
+    mesh.position.set(x + xWidth / 2, height / 2, z + zWidth / 2);
 
     if (physicsWorld) {
-      const halfExtents = new CANNON.Vec3(actualWidth / 2, height / 2, actualDepth / 2);
+      const halfExtents = new CANNON.Vec3(
+        actualWidth / 2,
+        height / 2,
+        actualDepth / 2
+      );
       const shape = new CANNON.Box(halfExtents);
 
       const body = new CANNON.Body({
@@ -758,7 +804,6 @@ const initFunc = forwardRef((props, ref) => {
       physicsWorld.addBody(body);
       mesh.userData.physicsBody = body; // nếu cần cập nhật/sync sau
     }
-
 
     // Cập nhật chiều cao
     mesh.updateHeight = (newHeight) => {
@@ -793,7 +838,11 @@ const initFunc = forwardRef((props, ref) => {
           body.removeShape(body.shapes[0]);
         }
 
-        const newHalfExtents = new CANNON.Vec3(actualWidth / 2, newHeight / 2, actualDepth / 2);
+        const newHalfExtents = new CANNON.Vec3(
+          actualWidth / 2,
+          newHeight / 2,
+          actualDepth / 2
+        );
         const newShape = new CANNON.Box(newHalfExtents);
         body.addShape(newShape);
         body.position.y = newHeight / 2; // đảm bảo vẫn đặt đáy ở y=0
@@ -811,11 +860,11 @@ const initFunc = forwardRef((props, ref) => {
     return mesh;
   }
   useEffect(() => {
-    useGroupRef.current = useGroup
-  }, [useGroup])
+    useGroupRef.current = useGroup;
+  }, [useGroup]);
   useEffect(() => {
-    if (!splitGroup || useGroupRef.current) return
-    splitGroupRef.current = splitGroup
+    if (!splitGroup || useGroupRef.current) return;
+    splitGroupRef.current = splitGroup;
     let groups = selectedObjectRef.current;
     let scene = sceneRef.current;
     // let children = getAllUniqueMeshes(groups);
@@ -826,8 +875,14 @@ const initFunc = forwardRef((props, ref) => {
       }
     });
     const childArr = Array.from(meshSet);
-    if (groups && groups.type == 'Group' && childArr && childArr.length && scene) {
-      childArr.forEach(objTT => {
+    if (
+      groups &&
+      groups.type == "Group" &&
+      childArr &&
+      childArr.length &&
+      scene
+    ) {
+      childArr.forEach((objTT) => {
         try {
           objTT.castShadow = true;
           objTT.material.side = THREE.DoubleSide;
@@ -837,17 +892,17 @@ const initFunc = forwardRef((props, ref) => {
           objTT.userData.isChildGroup = null;
           objTT.userData.uuidTargetGroup = null;
           objTT.userData.targetGroup = null;
-        } catch { }
-        scene.attach(objTT)
-      })
+        } catch {}
+        scene.attach(objTT);
+      });
       if (groups.userData && groups.userData.bboxMesh) {
-        scene.remove(groups.userData.bboxMesh)
+        scene.remove(groups.userData.bboxMesh);
       }
       if (groups.userData && groups.userData.pivot) {
-        scene.remove(groups.userData.pivot)
+        scene.remove(groups.userData.pivot);
       }
     }
-  }, [splitGroup])
+  }, [splitGroup]);
   function useTrackMouse3D(containerRef, camera, onUpdatePosition) {
     useEffect(() => {
       if (!containerRef.current) return;
@@ -873,7 +928,7 @@ const initFunc = forwardRef((props, ref) => {
       return () => {
         try {
           containerRef.current.removeEventListener("mousemove", onMouseMove);
-        } catch { }
+        } catch {}
       };
     }, [containerRef, camera, onUpdatePosition]);
   }
@@ -881,48 +936,59 @@ const initFunc = forwardRef((props, ref) => {
     setMousePos3D(pos);
   });
   useEffect(() => {
-    console.log("watch positionDoorWindow", positionDoorWindow)
     if (!modelThreeCommonRef.current || !modelThreeCommonRef.current) {
-      console.log("chua add xong")
     }
     const scene = sceneRef.current;
-    const modelThreeCommonRefT = modelThreeCommonRef.current
+    const modelThreeCommonRefT = modelThreeCommonRef.current;
     let modelDoor;
     try {
-      modelDoor = modelThreeCommonRefT['door-window'][Object.keys(modelThreeCommonRefT['door-window'])[0]]
-    } catch { }
+      modelDoor =
+        modelThreeCommonRefT["door-window"][
+          Object.keys(modelThreeCommonRefT["door-window"])[0]
+        ];
+    } catch {}
     // door-window
     if (positionDoorWindow && positionDoorWindow.length) {
       for (let i = 0; i < positionDoorWindow.length; i++) {
         // if (i != 4) continue;
-        let dataDoor = positionDoorWindow[i]
-        console.log(`data${i}=`, dataDoor)
-        const model = modelDoor.clone()
-        const doorHeight = 80
-        const { x: x, y: z, width: xWidth, height: zWidth } = dataDoor
+        let dataDoor = positionDoorWindow[i];
+        const model = modelDoor.clone();
+        const doorHeight = 80;
+        const { x: x, y: z, width: xWidth, height: zWidth } = dataDoor;
         let rotate;
         if (xWidth > 1.5 * zWidth) {
           rotate = Math.PI / 2;
         }
-        let door = createDoorFromModel(model, { x: x, y: 0, z: z }, { x: x + xWidth, y: 0, z: z + zWidth }, 1, 1, doorHeight, rotate)
+        let door = createDoorFromModel(
+          model,
+          { x: x, y: 0, z: z },
+          { x: x + xWidth, y: 0, z: z + zWidth },
+          1,
+          1,
+          doorHeight,
+          rotate
+        );
         if (door && door.model) {
-          const model = door.model
-          const pivotmodel = door.pivot
-          interactableMeshes.current.push(model)
+          const model = door.model;
+          const pivotmodel = door.pivot;
+          interactableMeshes.current.push(model);
           scene.add(pivotmodel);
         }
       }
     }
-
-  }, [positionDoorWindow])
+  }, [positionDoorWindow]);
 
   useEffect(() => {
     const scene = sceneRef.current;
     // Vẽ các box
-    const boxes = mergeWallsT
+    const boxes = mergeWallsT;
     for (const box of boxes) {
       const geometry = new THREE.BoxGeometry(box.width, box.height, box.depth);
-      const material = new THREE.MeshStandardMaterial({ color: 0x8888ff, roughness: 0.7, metalness: 0.0 });
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x8888ff,
+        roughness: 0.7,
+        metalness: 0.0,
+      });
       const mesh = new THREE.Mesh(geometry, material);
 
       // Đặt vị trí: y = height/2 để tường đứng trên mặt đất
@@ -930,7 +996,7 @@ const initFunc = forwardRef((props, ref) => {
 
       scene.add(mesh);
     }
-  }, [mergeWallsT])
+  }, [mergeWallsT]);
 
   useEffect(() => {
     if (
@@ -955,7 +1021,9 @@ const initFunc = forwardRef((props, ref) => {
   const debouncedUpdatePosition = useRef(
     _.debounce(() => {
       if (selectedObjectRef && selectedObjectRef.current) {
-        const obj = selectedObjectRef.current.userData?.pivot || selectedObjectRef.current;
+        const obj =
+          selectedObjectRef.current.userData?.pivot ||
+          selectedObjectRef.current;
         if (obj) {
           const pos = obj.position.toArray();
           setpositionSelectObjet(pos);
@@ -966,7 +1034,9 @@ const initFunc = forwardRef((props, ref) => {
   const throttledUpdatePosition = useRef(
     _.throttle(() => {
       if (selectedObjectRef && selectedObjectRef.current) {
-        const obj = selectedObjectRef.current.userData?.pivot || selectedObjectRef.current;
+        const obj =
+          selectedObjectRef.current.userData?.pivot ||
+          selectedObjectRef.current;
         if (obj) {
           const pos = obj.position.toArray();
           setpositionSelectObjet(pos);
@@ -974,13 +1044,49 @@ const initFunc = forwardRef((props, ref) => {
       }
     }, 200) // mỗi 100ms gọi 1 lần
   ).current;
+  function createColliderFromMesh(mesh) {
+    mesh.updateMatrixWorld(true);
+
+    // Clone geometry và bake transform
+    const clonedGeometry = mesh.geometry.clone();
+    clonedGeometry.applyMatrix4(mesh.matrixWorld);
+
+    // Tính bounding box và center
+    clonedGeometry.computeBoundingBox();
+    const bbox = clonedGeometry.boundingBox;
+    const size = new THREE.Vector3();
+    bbox.getSize(size);
+    const center = new THREE.Vector3();
+    bbox.getCenter(center);
+
+    // Tạo shape box từ kích thước
+    const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
+    const shape = new CANNON.Box(halfExtents);
+
+    // Tạo body
+    const body = new CANNON.Body({
+      mass: 0,
+      shape: shape,
+    });
+
+    // Set vị trí và quaternion từ mesh
+    body.position.set(center.x, center.y, center.z);
+
+    const quat = new THREE.Quaternion();
+    mesh.getWorldQuaternion(quat);
+    body.quaternion.copy(quat);
+
+    body.aabbNeedsUpdate = true;
+
+    return body;
+  }
   useEffect(() => {
-    loadModelCommons()
+    loadModelCommons();
     try {
       const renderer = rendererRef.current;
       if (renderer && renderer.domElement)
         containerRef.current.removeChild(renderer.domElement);
-    } catch { }
+    } catch {}
     const sceneWidth = containerRef.current.clientWidth;
     const sceneHeight = containerRef.current.clientHeight;
 
@@ -1039,32 +1145,146 @@ const initFunc = forwardRef((props, ref) => {
     containerRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
+    const cannonDebugger = CannonDebugger(scene, worldCannonRef.current, {
+      color: "black", // Màu collider
+    });
+    cannonDebugger.visible =false
+
     // controls
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.set(gridSize[0] / 2, 0, gridSize[1] / 2);
     controls.update();
     controlsRef.current = controls;
 
-
-
     // // Tạo mesh ví dụ
-    // let createBox = [];
-    // const boxGeo = new THREE.BoxGeometry(5, 5, 5);
-    // for (let i = 0; i < 30; i++) {
-    //   const boxMat = new THREE.MeshStandardMaterial({ color: 0x0088ff });
-    //   const mesh = new THREE.Mesh(boxGeo, boxMat);
-    //   mesh.position.set(
-    //     Math.random() * 200 - 25 + gridSize[0] / 2,
-    //     Math.random() * 50 + 25,
-    //     Math.random() * 200 - 25 + gridSize[1] / 2
-    //   );
-    //   mesh.userData.selectable = true;
-    //   mesh.userData.SelectionBox = true;
-    //   mesh.isSelectionBox = true;
-    //   scene.add(mesh);
-    //   createBox.push(mesh);
-    //   // interactableMeshes.current.push(mesh);
-    // }
+    let createBox = [];
+    const boxGeo = new THREE.BoxGeometry(5, 5, 5);
+    for (let i = 0; i < 20; i++) {
+      const boxMat = new THREE.MeshStandardMaterial({ color: 0x0088ff });
+      // const mesh = new THREE.Mesh(boxGeo, boxMat)
+      const mesh = new CustomMesh(boxGeo, boxMat);
+      mesh.position.set(
+        Math.random() * 200 - 25 + gridSize[0] / 2,
+        // Math.random() * 50 + 25,
+        0,
+        Math.random() * 200 - 25 + gridSize[1] / 2
+      );
+      mesh.userData.selectable = true;
+      mesh.userData.SelectionBox = true;
+      mesh.isSelectionBox = true;
+      dovatdichuyen.current.push(mesh);
+      scene.add(mesh);
+      createBox.push(mesh);
+
+      // 2. Lấy kích thước box từ geometry (để tạo Collider)
+      boxGeo.computeBoundingBox();
+      const size = new THREE.Vector3();
+      boxGeo.boundingBox.getSize(size);
+
+      // 3. Tạo shape và body Cannon.js
+      const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
+      const boxShape = new CANNON.Box(halfExtents);
+      const boxBody = new CANNON.Body({
+        mass: 0, // đổi thành 0 nếu muốn đứng yên
+        shape: boxShape,
+      });
+
+      // 4. Đặt vị trí vật lý giống mesh
+      boxBody.position.set(mesh.position.x, mesh.position.y, mesh.position.z);
+
+      // 5. Thêm body vào thế giới vật lý
+      worldCannonRef.current.addBody(boxBody);
+
+      objects_TuTacDong_Ref.current.push({
+        mesh: mesh,
+        body: boxBody,
+      });
+      mesh.onTransformChange = (type, axis, newVal) => {
+        console.log("onTransformChange")
+        if (
+          // useTransformFromHand.current &&
+          objects_TuTacDong_Ref.current &&
+          objects_TuTacDong_Ref.current.length
+        ) {
+          for (let i = 0; i < objects_TuTacDong_Ref.current.length; i++) {
+            if (
+              objects_TuTacDong_Ref.current[i].mesh &&
+              objects_TuTacDong_Ref.current[i].mesh.uuid == mesh.uuid
+            ) {
+              const { mesh, body } = objects_TuTacDong_Ref.current[i];
+              if (
+                type == "position" ||
+                type == "rotation" ||
+                type == "quaternion"
+              ) {
+                updateTransformToFrom(mesh, body);
+              } else if (type == "scale") {
+                mesh.updateMatrixWorld(true);
+                // 2. Tìm collider cũ (nếu có)
+                const idx = i;
+                if (idx === -1) {
+                  console.warn(
+                    "Không tìm thấy collider tương ứng với mesh:",
+                    mesh.name
+                  );
+                  return;
+                }
+                const { body: oldBody } = objects_TuTacDong_Ref.current[idx];
+
+                // 3. Loại bỏ body cũ khỏi world
+                worldCannonRef.current.removeBody(oldBody);
+
+                // 1. Lấy bounding box LOCAL của geometry gốc
+                const bbox =
+                  mesh.geometry.boundingBox ||
+                  mesh.geometry.clone().computeBoundingBox();
+                const sizeLocal = new THREE.Vector3();
+                bbox.getSize(sizeLocal);
+                const centerLocal = new THREE.Vector3();
+                bbox.getCenter(centerLocal);
+
+                // 2. Lấy scale của mesh trong thế giới
+                const scaleWorld = new THREE.Vector3();
+                mesh.getWorldScale(scaleWorld);
+
+                // 3. Tính lại size collider theo scale thực
+                const sizeWorld = sizeLocal.clone().multiply(scaleWorld);
+                const centerWorld = centerLocal
+                  .clone()
+                  .applyMatrix4(mesh.matrixWorld);
+
+                // 3. Tạo collider mới
+                const halfExtents = new CANNON.Vec3(
+                  sizeWorld.x / 2,
+                  sizeWorld.y / 2,
+                  sizeWorld.z / 2
+                );
+                const shape = new CANNON.Box(halfExtents);
+                const newBody = new CANNON.Body({ mass: 0, shape });
+
+                // 4. Đặt collider đúng vị trí & xoay
+                newBody.position.set(
+                  centerWorld.x,
+                  centerWorld.y,
+                  centerWorld.z
+                );
+                const quat = new THREE.Quaternion();
+                mesh.getWorldQuaternion(quat);
+                newBody.quaternion.set(quat.x, quat.y, quat.z, quat.w);
+                newBody.aabbNeedsUpdate = true;
+
+                // 7. Thêm vào world mới
+                worldCannonRef.current.addBody(newBody);
+                objects_TuTacDong_Ref.current[idx].body = newBody;
+              }
+
+              break;
+            }
+          }
+        }
+      };
+      // interactableMeshes.current.push(mesh);
+    }
 
     // Interaction variables
     const offset = new THREE.Vector3();
@@ -1095,7 +1315,6 @@ const initFunc = forwardRef((props, ref) => {
     selectionHelperRef.current = helperSelectionBoxT;
 
     function onMouseDown(event) {
-      console.log("mousedown")
       const rect = renderer.domElement.getBoundingClientRect();
       if (isSelectingRect && isSelectingRect.current) {
         controls.enabled = false;
@@ -1138,16 +1357,18 @@ const initFunc = forwardRef((props, ref) => {
             intersects[0].object.userData.uuidTargetGroup
           ) {
             pickedMesh = intersects[0].object.userData.targetGroup;
-            meshBoudingboxOfGroup = intersects[0].object
-            objFrom = 'group'
+            meshBoudingboxOfGroup = intersects[0].object;
+            objFrom = "group";
           } else {
             pickedMesh = intersects[0].object;
-            objFrom = 'mesh'
+            objFrom = "mesh";
           }
           if (pickedMesh && objFrom) {
-            if (objFrom == 'mesh') {
-              setArrayObjectSelected(prev => {
-                const idx = prev.findIndex(obj => obj.uuid === pickedMesh.uuid);
+            if (objFrom == "mesh") {
+              setArrayObjectSelected((prev) => {
+                const idx = prev.findIndex(
+                  (obj) => obj.uuid === pickedMesh.uuid
+                );
                 if (idx >= 0) {
                   // Đã có → xoá
                   const newArr = [...prev];
@@ -1158,12 +1379,12 @@ const initFunc = forwardRef((props, ref) => {
                   return [...prev, pickedMesh];
                 }
               });
-            } else if (objFrom == 'group' && meshBoudingboxOfGroup) {
+            } else if (objFrom == "group" && meshBoudingboxOfGroup) {
               // pickedMesh đang là group nên add vào hay xóa đi phải tìm các mesh con bên trong nhé
-              setArrayObjectSelected(prev => {
-                const existing = new Map(prev.map(obj => [obj.uuid, obj]));
+              setArrayObjectSelected((prev) => {
+                const existing = new Map(prev.map((obj) => [obj.uuid, obj]));
                 if (pickedMesh?.children?.length) {
-                  pickedMesh.children.forEach(mesh => {
+                  pickedMesh.children.forEach((mesh) => {
                     if (!mesh.userData.meshBoudingBoxOfGroup) {
                       if (existing.has(mesh.uuid)) {
                         // // nếu k xóa sẽ bị lỗi lặp vì cái mesh này đang tham chiếu đến 1 target group khác nên clone là ko thể
@@ -1186,7 +1407,6 @@ const initFunc = forwardRef((props, ref) => {
                         existing.set(mesh.uuid, mesh);
                       }
                     }
-
                   });
                 }
 
@@ -1205,7 +1425,6 @@ const initFunc = forwardRef((props, ref) => {
               //   }
               // });
             }
-
           }
         }
       } else {
@@ -1269,25 +1488,43 @@ const initFunc = forwardRef((props, ref) => {
           }
         } else {
           selectedObjectRef.current = null;
-          setArrayObjectSelected((prev) => [])
+          setArrayObjectSelected((prev) => []);
         }
-
       }
       setselectedRefObJSelected(selectedObjectRef.current);
-      if (arrUuidBoxMeshGroup && arrUuidBoxMeshGroup.current && arrUuidBoxMeshGroup.current.length) {
+      if (
+        arrUuidBoxMeshGroup &&
+        arrUuidBoxMeshGroup.current &&
+        arrUuidBoxMeshGroup.current.length
+      ) {
         for (let i = 0; i < arrUuidBoxMeshGroup.current.length; i++) {
-          if (selectedObjectRef && selectedObjectRef.current && selectedObjectRef.current.uuid == arrUuidBoxMeshGroup.current[i]) {
-            selectedObjectRef.current.visible = true
-          } else if (selectedObjectRef && selectedObjectRef.current && selectedObjectRef.current.userData && selectedObjectRef.current.userData.bboxMesh) {
-            const object = sceneRef.current.getObjectByProperty('uuid', selectedObjectRef.current.userData.bboxMesh.uuid);
+          if (
+            selectedObjectRef &&
+            selectedObjectRef.current &&
+            selectedObjectRef.current.uuid == arrUuidBoxMeshGroup.current[i]
+          ) {
+            selectedObjectRef.current.visible = true;
+          } else if (
+            selectedObjectRef &&
+            selectedObjectRef.current &&
+            selectedObjectRef.current.userData &&
+            selectedObjectRef.current.userData.bboxMesh
+          ) {
+            const object = sceneRef.current.getObjectByProperty(
+              "uuid",
+              selectedObjectRef.current.userData.bboxMesh.uuid
+            );
             if (object) {
-              object.visible = true
+              object.visible = true;
             }
           } else {
             // cần phải ấn hết các mesh của các box này đi
-            const object = sceneRef.current.getObjectByProperty('uuid', arrUuidBoxMeshGroup.current[i]);
+            const object = sceneRef.current.getObjectByProperty(
+              "uuid",
+              arrUuidBoxMeshGroup.current[i]
+            );
             if (object) {
-              object.visible = false
+              object.visible = false;
             }
           }
         }
@@ -1295,7 +1532,7 @@ const initFunc = forwardRef((props, ref) => {
     }
 
     function onMouseMove(event) {
-
+      useTransformFromHand.current = false;
       if (!isSelectingRect && isSelectingRect.current) {
         // selectionHelperRef.current._onSelectMove(event);
         const rect = renderer.domElement.getBoundingClientRect();
@@ -1319,6 +1556,7 @@ const initFunc = forwardRef((props, ref) => {
         const obj = selectedObjectRef.current;
 
         if (modeRef.current === "drag") {
+          useTransformFromHand.current = true;
           raycaster.setFromCamera(mouse, cameraRef.current);
           const intersection = new THREE.Vector3();
           if (raycaster.ray.intersectPlane(plane, intersection)) {
@@ -1334,6 +1572,7 @@ const initFunc = forwardRef((props, ref) => {
             }
           }
         } else if (modeRef.current === "rotate") {
+          useTransformFromHand.current = true;
           const pivot = findPivotFromMesh(obj) || obj;
           const deltaX = event.clientX - startMouse.x;
           const deltaY = event.clientY - startMouse.y;
@@ -1351,6 +1590,7 @@ const initFunc = forwardRef((props, ref) => {
           }
           // pivot.rotation.z = startRotation.z + deltaX * rotateSpeed;
         } else if (modeRef.current === "scale") {
+          useTransformFromHand.current = true;
           const pivot = findPivotFromMesh(obj) || obj;
           const delta = event.clientY - startMouse.y;
           const scaleFactor = Math.max(0.1, startScale.x + delta * 0.01); // scale không nhỏ hơn 0.1
@@ -1362,8 +1602,7 @@ const initFunc = forwardRef((props, ref) => {
         }
       }
       // debouncedUpdatePosition()
-      throttledUpdatePosition()
-
+      throttledUpdatePosition();
     }
     function onMouseUp(event) {
       if (isMoveRotateScaleRef && isMoveRotateScaleRef.current) {
@@ -1386,35 +1625,45 @@ const initFunc = forwardRef((props, ref) => {
         selectionBox.endPoint.set(x, y, 0.5);
         const allSelected = selectionBox.select();
         let filterAllSelected2 = [];
-        const filterAllSelected = allSelected.filter(
-          (obj) => {
-            if (obj.userData && obj.userData.SelectionBox) {
-              if (!obj.userData.isChildGroup && !obj.userData.isBBox) {
-                obj.userData = {
-                  SelectionBox: true,
-                  selectable: true
-                }
-                filterAllSelected2.push(obj)
-                return true
-              } else if (obj.userData.meshBoudingBoxOfGroup && obj.userData.isBBox && obj.userData.targetGroup) {
-                if (obj.userData.targetGroup && obj.userData.targetGroup.children && obj.userData.targetGroup.children.length) {
-                  obj.userData.targetGroup.children.forEach(objjT => {
-                    if (objjT.userData && objjT.userData && !objjT.userData.meshBoudingBoxOfGroup && !objjT.userData.isBBox) {
-                      objjT.userData = {
-                        SelectionBox: true,
-                        selectable: true
-                      }
-                      filterAllSelected2.push(objjT)
-                    }
-                  })
-
-                }
-                return true
+        const filterAllSelected = allSelected.filter((obj) => {
+          if (obj.userData && obj.userData.SelectionBox) {
+            if (!obj.userData.isChildGroup && !obj.userData.isBBox) {
+              obj.userData = {
+                SelectionBox: true,
+                selectable: true,
+              };
+              filterAllSelected2.push(obj);
+              return true;
+            } else if (
+              obj.userData.meshBoudingBoxOfGroup &&
+              obj.userData.isBBox &&
+              obj.userData.targetGroup
+            ) {
+              if (
+                obj.userData.targetGroup &&
+                obj.userData.targetGroup.children &&
+                obj.userData.targetGroup.children.length
+              ) {
+                obj.userData.targetGroup.children.forEach((objjT) => {
+                  if (
+                    objjT.userData &&
+                    objjT.userData &&
+                    !objjT.userData.meshBoudingBoxOfGroup &&
+                    !objjT.userData.isBBox
+                  ) {
+                    objjT.userData = {
+                      SelectionBox: true,
+                      selectable: true,
+                    };
+                    filterAllSelected2.push(objjT);
+                  }
+                });
               }
+              return true;
             }
-            return false;
           }
-        );
+          return false;
+        });
         setArrayObjectSelected(filterAllSelected2);
       }
     }
@@ -1423,7 +1672,7 @@ const initFunc = forwardRef((props, ref) => {
       // ✅ Chỉ bật nếu duy nhất 1 phím và là Shift
       if (pressedKeys.current.size === 1 && pressedKeys.current.has("Shift")) {
         isSelectingRect.current = true;
-        isCtrlAddSelectingRect.current = false
+        isCtrlAddSelectingRect.current = false;
         controls.enabled = false;
         if (
           selectionHelperRef &&
@@ -1433,12 +1682,15 @@ const initFunc = forwardRef((props, ref) => {
           selectionHelperRef.current.enabled = true;
           selectionHelperRef.current.element.style.display = "block";
         }
-      } else if (pressedKeys.current.size === 1 && pressedKeys.current.has("Control")) {
+      } else if (
+        pressedKeys.current.size === 1 &&
+        pressedKeys.current.has("Control")
+      ) {
         isSelectingRect.current = false;
-        isCtrlAddSelectingRect.current = true
+        isCtrlAddSelectingRect.current = true;
       } else {
         isSelectingRect.current = false;
-        isCtrlAddSelectingRect.current = false
+        isCtrlAddSelectingRect.current = false;
         controls.enabled = true;
         if (selectionHelperRef.current) {
           selectionHelperRef.current.enabled = false;
@@ -1456,7 +1708,7 @@ const initFunc = forwardRef((props, ref) => {
           "❌ Không hợp lệ (đồng thời nhiều phím hoặc không phải Shift)"
         );
       }
-    }
+    };
     const funckeyup = (event) => {
       pressedKeys.current.delete(event.key);
       // Nếu bỏ Shift → tắt luôn
@@ -1480,7 +1732,7 @@ const initFunc = forwardRef((props, ref) => {
         isCtrlAddSelectingRect.current = false;
         controls.enabled = true;
       }
-    }
+    };
     const handleWindowBlur = () => {
       pressedKeys.current.clear();
     };
@@ -1492,7 +1744,6 @@ const initFunc = forwardRef((props, ref) => {
         cameraRef.current.updateProjectionMatrix();
         rendererRef.current.setSize(sceneWidth, sceneHeight);
       }
-
     };
     rendererRef.current.domElement.addEventListener("mousedown", onMouseDown);
     rendererRef.current.domElement.addEventListener("mousemove", onMouseMove);
@@ -1508,10 +1759,9 @@ const initFunc = forwardRef((props, ref) => {
     });
     // ANIMATION LOOP
     const clock = new THREE.Clock();
-    clockCannonRef.current = clock
+    clockCannonRef.current = clock;
     const animate = () => {
       requestAnimationFrame(animate);
-
 
       const deltaConnon = Math.min(clock.getDelta(), 0.1); // max 100ms
       worldCannonRef.current.step(1 / 60, deltaConnon);
@@ -1521,15 +1771,25 @@ const initFunc = forwardRef((props, ref) => {
         meshT.position.copy(bodyT.position);
         meshT.quaternion.copy(bodyT.quaternion);
       });
-      // if (arrHelperUpdate.current && arrHelperUpdate.current.length) {
-      //   arrHelperUpdate.current.forEach(({ helper, target }) => {
-      //     // helper.position.copy(target.getWorldPosition(new THREE.Vector3()));
-      //     // helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
-      //     target.updateMatrixWorld(true);
-      //     helper.position.copy(target.getWorldPosition(new THREE.Vector3()));
-      //     helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
-      //   });
-      // }
+      // objects_TuTacDong_Ref.current.forEach(({ mesh, body }) => {
+      //   const { position, quaternion, scale } = getGlobalTransform(mesh);
+      //   // body.position.copy(mesh.position);
+      //   // body.quaternion.copy(mesh.quaternion);
+      //   // body.aabbNeedsUpdate = true;
+      //   body.position.copy(position);
+      //   body.quaternion.copy(quaternion);
+      //   body.aabbNeedsUpdate = true;
+      // });
+
+      if (arrHelperUpdate.current && arrHelperUpdate.current.length) {
+        arrHelperUpdate.current.forEach(({ helper, target }) => {
+          //     // helper.position.copy(target.getWorldPosition(new THREE.Vector3()));
+          //     // helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
+          //     target.updateMatrixWorld(true);
+          //     helper.position.copy(target.getWorldPosition(new THREE.Vector3()));
+          //     helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
+        });
+      }
 
       // arrHelperUpdate.current.forEach(({ helper, target }) => {
       //   target.updateMatrixWorld(true);
@@ -1547,26 +1807,65 @@ const initFunc = forwardRef((props, ref) => {
       //   helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
       //   // helper.scale.copy(target.getWorldScale(new THREE.Vector3()));
       // });
+      // cannonDebugger.update();
+      if (
+        arrBox3HelperAutoUpdate &&
+        arrBox3HelperAutoUpdate.current &&
+        arrBox3HelperAutoUpdate.current.length
+      ) {
+        for (let i = 0; i < arrBox3HelperAutoUpdate.current.length; i++) {
+          arrBox3HelperAutoUpdate.current[i].box3.setFromObject(
+            arrBox3HelperAutoUpdate.current[i].obj
+          );
+        }
+      }
 
       if (controlsRef && controlsRef.current) {
         controlsRef.current.update();
       }
-      if (rendererRef && rendererRef.current && cameraRef && cameraRef.current && sceneRef && sceneRef.current) {
+      if (
+        rendererRef &&
+        rendererRef.current &&
+        cameraRef &&
+        cameraRef.current &&
+        sceneRef &&
+        sceneRef.current
+      ) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
       }
     };
     animate();
     return () => {
-      rendererRef.current.domElement.removeEventListener("mousedown", onMouseDown);
-      rendererRef.current.domElement.removeEventListener("mousemove", onMouseMove);
+      rendererRef.current.domElement.removeEventListener(
+        "mousedown",
+        onMouseDown
+      );
+      rendererRef.current.domElement.removeEventListener(
+        "mousemove",
+        onMouseMove
+      );
       rendererRef.current.domElement.removeEventListener("mouseup", onMouseUp);
-    }
-
+    };
   }, []);
+  function getGlobalTransform(mesh) {
+    // Cập nhật matrixWorld nếu chưa cập nhật
+    mesh.updateMatrixWorld(true);
+
+    const position = new THREE.Vector3();
+    const quaternion = new THREE.Quaternion();
+    const scale = new THREE.Vector3();
+
+    mesh.matrixWorld.decompose(position, quaternion, scale);
+
+    return {
+      position,
+      quaternion,
+      scale,
+    };
+  }
   const selectedGroupRefOld = usePrevious(arrayObjectSelected);
   // useEffect(() => {
   // }, [selectedGroupRefOld]);
-
 
   useEffect(() => {
     // suaoday
@@ -1578,7 +1877,7 @@ const initFunc = forwardRef((props, ref) => {
           mesh.userData.isChildGroup = null;
           mesh.userData.targetGroup = null;
           mesh.userData.uuidTargetGroup = null;
-        } catch { }
+        } catch {}
         // scene.attach(mesh);
       });
     }
@@ -1587,8 +1886,10 @@ const initFunc = forwardRef((props, ref) => {
       return;
     }
     // Tạo group mới và thêm mesh đã chọn vào
-    const selectedGroup = new THREE.Group();
-    selectedGroup.disabledSplit = true
+    // const selectedGroup = new THREE.Group();
+    const selectedGroup = new CustomGroup();
+
+    selectedGroup.disabledSplit = true;
     selectedGroup.filterBbox = true;
     // const selectedGroup = simulatedMesh.current
     arrayObjectSelected.forEach((mesh) => {
@@ -1626,48 +1927,104 @@ const initFunc = forwardRef((props, ref) => {
     bboxMesh.userData.targetGroup = selectedGroup;
     bboxMesh.userData.uuidTargetGroup = selectedGroup.uuid;
     bboxMesh.userData.meshBoudingBoxOfGroup = selectedGroup.uuid;
-    arrUuidBoxMeshGroup.current.push(bboxMesh.uuid)
+    arrUuidBoxMeshGroup.current.push(bboxMesh.uuid);
     selectedGroup.userData.bboxMesh = bboxMesh;
     simulatedMesh.current = selectedGroup;
 
     // --- THÊM ĐOẠN NÀY: TẠO PIVOT ---
     const pivot = new THREE.Object3D();
+
     pivot.position.copy(center); // tâm group
     scene.add(pivot);
     pivot.add(selectedGroup);
     pivot.add(bboxMesh);
-    selectedGroup.position.sub(center);      // ✅ đúng: giữ vị trí cũ sau khi vào pivot
-    bboxMesh.position.copy(center);  // đặt về world
+    selectedGroup.position.sub(center); // ✅ đúng: giữ vị trí cũ sau khi vào pivot
+    bboxMesh.position.copy(center); // đặt về world
     bboxMesh.position.sub(pivot.position); // ✅ chuyển về local trong pivot
     // Gán pivot vào userData
     selectedGroup.userData.pivot = pivot;
     bboxMesh.userData.pivot = pivot; // để bắt sau này
-    selectedObjectRef.current = selectedGroup
+    selectedObjectRef.current = selectedGroup;
+
+    selectedGroup.onTransformChange = (type, axis, val) => {
+      if (
+        useTransformFromHand.current &&
+        objects_TuTacDong_Ref.current &&
+        objects_TuTacDong_Ref.current.length
+      ) {
+        let objects_TuTacDong_Ref_obj = {};
+        for (let i = 0; i < objects_TuTacDong_Ref.current.length; i++) {
+          if (objects_TuTacDong_Ref.current[i].mesh.isMesh) {
+            objects_TuTacDong_Ref_obj[
+              objects_TuTacDong_Ref.current[i].mesh.uuid
+            ] = {
+              idx: i,
+            };
+          }
+        }
+
+        const arrayObjectSelectedT = [...arrayObjectSelected];
+        if (arrayObjectSelectedT && arrayObjectSelectedT.length) {
+          for (let k = 0; k < arrayObjectSelectedT.length; k++) {
+            if (
+              objects_TuTacDong_Ref_obj[arrayObjectSelectedT[k].uuid] &&
+              arrayObjectSelectedT[k].isMesh
+            ) {
+              const bodyCannon = createColliderFromMesh(
+                arrayObjectSelectedT[k]
+              );
+              if (bodyCannon) {
+                // Remove body cũ khỏi world
+                worldCannonRef.current.removeBody(
+                  objects_TuTacDong_Ref.current[
+                    objects_TuTacDong_Ref_obj[arrayObjectSelectedT[k].uuid].idx
+                  ].body
+                );
+                worldCannonRef.current.addBody(bodyCannon);
+                objects_TuTacDong_Ref.current[
+                  objects_TuTacDong_Ref_obj[arrayObjectSelectedT[k].uuid].idx
+                ].body = bodyCannon;
+              }
+            }
+          }
+        }
+      }
+    };
+    selectedGroup.setPivot(pivot);
     // Cleanup khi effect thay đổi hoặc component unmount
     if (sceneRef && sceneRef.current) {
-      let pivotDel = []
+      let pivotDel = [];
       sceneRef.current.traverse((obj) => {
-        if (obj.type === 'Group' && obj.filterBbox) {
-          let check = false
+        if (obj.type === "Group" && obj.filterBbox) {
+          let check = false;
           if (obj && obj.children && obj.children.length) {
             for (let i = 0; i < obj.children.length; i++) {
-              if (obj.children[i].userData && obj.children[i].userData.SelectionBox && obj.children[i].userData.selectable && !obj.children[i].userData.meshBoudingBoxOfGroup && !obj.children[i].userData.pivot) {
-                check = true
-                break
+              if (
+                obj.children[i].userData &&
+                obj.children[i].userData.SelectionBox &&
+                obj.children[i].userData.selectable &&
+                !obj.children[i].userData.meshBoudingBoxOfGroup &&
+                !obj.children[i].userData.pivot
+              ) {
+                check = true;
+                break;
               }
             }
             if (!check && obj.userData.pivot) {
-              pivotDel.push(obj.userData.pivot)
-
+              pivotDel.push(obj.userData.pivot);
             }
-          } else if (obj && (!obj.children || !obj.children.length) && obj.userData.pivot) {
-            pivotDel.push(obj.userData.pivot)
+          } else if (
+            obj &&
+            (!obj.children || !obj.children.length) &&
+            obj.userData.pivot
+          ) {
+            pivotDel.push(obj.userData.pivot);
           }
         }
       });
       if (pivotDel && pivotDel.length) {
         for (let i = 0; i < pivotDel.length; i++) {
-          sceneRef.current.remove(pivotDel[i])
+          sceneRef.current.remove(pivotDel[i]);
         }
       }
     }
@@ -1725,12 +2082,24 @@ const initFunc = forwardRef((props, ref) => {
     }
   }, [sceneFloorColor]);
 
-  async function createFileFromUrl(url, filename, mimeType = 'application/octet-stream') {
+  async function createFileFromUrl(
+    url,
+    filename,
+    mimeType = "application/octet-stream"
+  ) {
     const res = await fetch(url);
     const blob = await res.blob();
     return new File([blob], filename, { type: mimeType });
   }
-  function createDoorFromModel(model, start, end, openDirection = 1, axisOrigin = 1, doorHeight = 50, deg = 0) {
+  function createDoorFromModel(
+    model,
+    start,
+    end,
+    openDirection = 1,
+    axisOrigin = 1,
+    doorHeight = 50,
+    deg = 0
+  ) {
     // axis=1 => trục của model gốc bên trái, axis=0 => trục của model gốc bên phải
     // 1. Tính khoảng cách và hướng
     const dx = end.x - start.x;
@@ -1801,12 +2170,26 @@ const initFunc = forwardRef((props, ref) => {
     }
     return null; // không tìm thấy pivot
   }
+  function updateTransformToFrom(mesh, body) {
+    mesh.updateMatrixWorld(true);
+
+    const bboxWorld = new THREE.Box3().setFromObject(mesh);
+    const centerWorld = new THREE.Vector3();
+    bboxWorld.getCenter(centerWorld);
+
+    const quaternion = new THREE.Quaternion();
+    mesh.getWorldQuaternion(quaternion);
+
+    body.position.copy(centerWorld);
+    body.quaternion.copy(quaternion);
+    body.aabbNeedsUpdate = true;
+  }
   const loadModelCommons = () => {
     // load ghe1,
     try {
       new Promise(async (resolve) => {
-        let path1 = '/models/source/door1.zip'
-        const file = await createFileFromUrl(path1, 'door1.zip');
+        let path1 = "/models/source/door1.zip";
+        const file = await createFileFromUrl(path1, "door1.zip");
         if (!file) return;
         let scaleModel = 0.5;
         let scaleX_Model = 0.8,
@@ -1844,13 +2227,13 @@ const initFunc = forwardRef((props, ref) => {
                     scaleZ_Model = gridSize[1] / sizeZ;
                     try {
                       scaleModel = Math.min(scaleX_Model, scaleZ_Model);
-                    } catch { }
+                    } catch {}
                   }
-                  console.log("model222", _.cloneDeep(model))
-                  console.log("size=", size)
-                  console.log("sizeBox=", sizeBox)
-                  console.log("grid size hien tai", gridSize)
-                  console.log("wall heigh", wallHeight)
+                  // console.log("model222", _.cloneDeep(model));
+                  // console.log("size=", size);
+                  // console.log("sizeBox=", sizeBox);
+                  // console.log("grid size hien tai", gridSize);
+                  // console.log("wall heigh", wallHeight);
                   model.traverse((child) => {
                     if (child.isMesh) {
                       child.castShadow = true;
@@ -1867,7 +2250,7 @@ const initFunc = forwardRef((props, ref) => {
                   model.position.set(0, 0, 0);
                   // scene.add(model);
                   // modelRef.current = model;
-                } catch { }
+                } catch {}
                 resolve();
               },
               (error) => {
@@ -1906,7 +2289,7 @@ const initFunc = forwardRef((props, ref) => {
             // ✅ Tạo manager và setURLModifier
             const manager = new THREE.LoadingManager();
             manager.setURLModifier((url) => {
-              const normalized = url.replace(/^(\.\/|\/)/, ''); // fix đường dẫn có ./ hoặc /
+              const normalized = url.replace(/^(\.\/|\/)/, ""); // fix đường dẫn có ./ hoặc /
               return blobUrlMap[normalized] || url;
             });
 
@@ -1935,11 +2318,10 @@ const initFunc = forwardRef((props, ref) => {
                   interactableMeshes.current.push(child);
                 }
               });
-              if (!modelThreeCommonRef.current['door-window']) {
-                modelThreeCommonRef.current['door-window'] = {}
+              if (!modelThreeCommonRef.current["door-window"]) {
+                modelThreeCommonRef.current["door-window"] = {};
               }
-              modelThreeCommonRef.current['door-window'][model.uuid] = model
-              console.log("------------da add ong model threejs common--------------")
+              modelThreeCommonRef.current["door-window"][model.uuid] = model;
               // const model1 = model.clone()
               // model1.scale.set(scaleModel, scaleModel, scaleModel);
               // // model1.scale.x *= -1;
@@ -1952,28 +2334,27 @@ const initFunc = forwardRef((props, ref) => {
               // scene.add(model1);
               // // const boxHelper1 = new THREE.BoxHelper(model1, 'red'); // màu vàng
               // // scene.add(boxHelper1);
-
             } catch (e) {
-              console.log(e)
+              console.log(e);
             }
-          } catch { }
+          } catch {}
           resolve();
         }
       });
-    } catch { }
-  }
+    } catch {}
+  };
 
   useEffect(() => {
-    return
-    console.log("watch model Name", modelName)
+    return;
+    console.log("watch model Name", modelName);
     // return;
     const scene = sceneRef.current;
-    if (modelName == 'model-30939153') {
+    if (modelName == "model-30939153") {
       // load ghe1,
       try {
         new Promise(async (resolve) => {
-          let path1 = '/models/source/door1.zip'
-          const file = await createFileFromUrl(path1, 'door1.zip');
+          let path1 = "/models/source/door1.zip";
+          const file = await createFileFromUrl(path1, "door1.zip");
           if (!file) return;
           let scaleModel = 0.5;
           let scaleX_Model = 0.8,
@@ -2011,13 +2392,13 @@ const initFunc = forwardRef((props, ref) => {
                       scaleZ_Model = gridSize[1] / sizeZ;
                       try {
                         scaleModel = Math.min(scaleX_Model, scaleZ_Model);
-                      } catch { }
+                      } catch {}
                     }
-                    console.log("model222", _.cloneDeep(model))
-                    console.log("size=", size)
-                    console.log("sizeBox=", sizeBox)
-                    console.log("grid size hien tai", gridSize)
-                    console.log("wall heigh", wallHeight)
+                    console.log("model222", _.cloneDeep(model));
+                    console.log("size=", size);
+                    console.log("sizeBox=", sizeBox);
+                    console.log("grid size hien tai", gridSize);
+                    console.log("wall heigh", wallHeight);
                     model.traverse((child) => {
                       if (child.isMesh) {
                         child.castShadow = true;
@@ -2034,7 +2415,7 @@ const initFunc = forwardRef((props, ref) => {
                     model.position.set(0, 0, 0);
                     scene.add(model);
                     // modelRef.current = model;
-                  } catch { }
+                  } catch {}
                   resolve();
                 },
                 (error) => {
@@ -2073,7 +2454,7 @@ const initFunc = forwardRef((props, ref) => {
               // ✅ Tạo manager và setURLModifier
               const manager = new THREE.LoadingManager();
               manager.setURLModifier((url) => {
-                const normalized = url.replace(/^(\.\/|\/)/, ''); // fix đường dẫn có ./ hoặc /
+                const normalized = url.replace(/^(\.\/|\/)/, ""); // fix đường dẫn có ./ hoặc /
                 return blobUrlMap[normalized] || url;
               });
 
@@ -2115,22 +2496,36 @@ const initFunc = forwardRef((props, ref) => {
                 // // const boxHelper1 = new THREE.BoxHelper(model1, 'red'); // màu vàng
                 // // scene.add(boxHelper1);
 
-                const doorHeight = 50
-                let model1 = model.clone()
-                let door1 = createDoorFromModel(model1, { x: 40, y: 0, z: 420 }, { x: 42, y: 0, z: 472 }, 1, 1, doorHeight)
+                const doorHeight = 50;
+                let model1 = model.clone();
+                let door1 = createDoorFromModel(
+                  model1,
+                  { x: 40, y: 0, z: 420 },
+                  { x: 42, y: 0, z: 472 },
+                  1,
+                  1,
+                  doorHeight
+                );
                 if (door1 && door1.model) {
-                  const model1 = door1.model
-                  const pivotmodel1 = door1.pivot
-                  interactableMeshes.current.push(model1)
+                  const model1 = door1.model;
+                  const pivotmodel1 = door1.pivot;
+                  interactableMeshes.current.push(model1);
                   scene.add(pivotmodel1);
                 }
 
-                let model2 = model.clone()
-                let door2 = createDoorFromModel(model2, { x: 40, y: 0, z: 330 }, { x: 40, y: 0, z: 380 }, 1, 1, doorHeight)
+                let model2 = model.clone();
+                let door2 = createDoorFromModel(
+                  model2,
+                  { x: 40, y: 0, z: 330 },
+                  { x: 40, y: 0, z: 380 },
+                  1,
+                  1,
+                  doorHeight
+                );
                 if (door2 && door2.model) {
-                  const model2 = door2.model
-                  const pivotmodel2 = door2.pivot
-                  interactableMeshes.current.push(model2)
+                  const model2 = door2.model;
+                  const pivotmodel2 = door2.pivot;
+                  interactableMeshes.current.push(model2);
                   // console.log("da add interactableMeshes2", interactableMeshes)
                   // console.log("scenescene", scene)
                   // console.log("model2", model2)
@@ -2147,58 +2542,93 @@ const initFunc = forwardRef((props, ref) => {
                   // scene.add(boxHelper1);
                 }
 
-                let model3 = model.clone()
-                let door3 = createDoorFromModel(model3, { x: 40, y: 0, z: 117 }, { x: 40, y: 0, z: 164 }, 0, 1, doorHeight)
+                let model3 = model.clone();
+                let door3 = createDoorFromModel(
+                  model3,
+                  { x: 40, y: 0, z: 117 },
+                  { x: 40, y: 0, z: 164 },
+                  0,
+                  1,
+                  doorHeight
+                );
                 if (door3 && door3.model) {
-                  const model3 = door3.model
-                  const pivotmodel3 = door3.pivot
-                  interactableMeshes.current.push(model3)
+                  const model3 = door3.model;
+                  const pivotmodel3 = door3.pivot;
+                  interactableMeshes.current.push(model3);
                   scene.add(pivotmodel3);
                 }
 
-                let model4 = model.clone()
-                let door4 = createDoorFromModel(model4, { x: 370, y: 0, z: 357 }, { x: 370, y: 0, z: 408 }, 1, 1, doorHeight)
+                let model4 = model.clone();
+                let door4 = createDoorFromModel(
+                  model4,
+                  { x: 370, y: 0, z: 357 },
+                  { x: 370, y: 0, z: 408 },
+                  1,
+                  1,
+                  doorHeight
+                );
                 if (door4 && door4.model) {
-                  const model4 = door4.model
-                  const pivotmodel4 = door4.pivot
-                  interactableMeshes.current.push(model4)
+                  const model4 = door4.model;
+                  const pivotmodel4 = door4.pivot;
+                  interactableMeshes.current.push(model4);
                   scene.add(pivotmodel4);
                 }
 
-                let model5 = model.clone()
-                let door5 = createDoorFromModel(model5, { x: 370, y: 0, z: 243 }, { x: 370, y: 0, z: 279 }, 1, 1, doorHeight)
+                let model5 = model.clone();
+                let door5 = createDoorFromModel(
+                  model5,
+                  { x: 370, y: 0, z: 243 },
+                  { x: 370, y: 0, z: 279 },
+                  1,
+                  1,
+                  doorHeight
+                );
                 if (door5 && door5.model) {
-                  const model5 = door5.model
-                  const pivotmodel5 = door5.pivot
-                  interactableMeshes.current.push(model5)
+                  const model5 = door5.model;
+                  const pivotmodel5 = door5.pivot;
+                  interactableMeshes.current.push(model5);
                   scene.add(pivotmodel5);
                 }
 
-                let model6 = model.clone()
-                let door6 = createDoorFromModel(model6, { x: 370, y: 0, z: 176 }, { x: 370, y: 0, z: 225 }, 1, 1, doorHeight)
+                let model6 = model.clone();
+                let door6 = createDoorFromModel(
+                  model6,
+                  { x: 370, y: 0, z: 176 },
+                  { x: 370, y: 0, z: 225 },
+                  1,
+                  1,
+                  doorHeight
+                );
                 if (door6 && door6.model) {
-                  const model6 = door6.model
-                  const pivotmodel6 = door6.pivot
-                  interactableMeshes.current.push(model6)
+                  const model6 = door6.model;
+                  const pivotmodel6 = door6.pivot;
+                  interactableMeshes.current.push(model6);
                   scene.add(pivotmodel6);
                 }
-                let model7 = model.clone()
-                let door7 = createDoorFromModel(model7, { x: 224, y: 0, z: 430 }, { x: 252, y: 0, z: 430 }, 1, 1, doorHeight, Math.PI / 2)
+                let model7 = model.clone();
+                let door7 = createDoorFromModel(
+                  model7,
+                  { x: 224, y: 0, z: 430 },
+                  { x: 252, y: 0, z: 430 },
+                  1,
+                  1,
+                  doorHeight,
+                  Math.PI / 2
+                );
                 if (door7 && door7.model) {
-                  const model7 = door7.model
-                  const pivotmodel7 = door7.pivot
-                  interactableMeshes.current.push(model7)
+                  const model7 = door7.model;
+                  const pivotmodel7 = door7.pivot;
+                  interactableMeshes.current.push(model7);
                   scene.add(pivotmodel7);
                 }
-
               } catch (e) {
-                console.log(e)
+                console.log(e);
               }
-            } catch { }
+            } catch {}
             resolve();
           }
         });
-      } catch { }
+      } catch {}
     }
 
     // Interaction variables
@@ -2211,7 +2641,6 @@ const initFunc = forwardRef((props, ref) => {
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
     function onMouseDown(event) {
-      console.log("mouse onMouseDown")
       const rect = rendererRef.current.domElement.getBoundingClientRect();
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -2222,8 +2651,6 @@ const initFunc = forwardRef((props, ref) => {
         interactableMeshes.current,
         true
       );
-      console.log("intersectsdrag", intersects)
-      console.log("interactableMeshesdơn", interactableMeshes)
       if (intersects.length > 0) {
         const pickedMesh = intersects[0].object;
         selectedObjectRef.current = pickedMesh;
@@ -2301,7 +2728,6 @@ const initFunc = forwardRef((props, ref) => {
           // Xoay quanh trục X khi kéo dọc
           pivot.rotation.x = startRotation.x + deltaY * rotateSpeed;
         }
-
       } else if (modeRef.current === "scale") {
         const delta = event.clientY - startMouse.y;
         const newScale = Math.max(0, startScale.x + delta * 0.01);
@@ -2322,15 +2748,14 @@ const initFunc = forwardRef((props, ref) => {
 
     const handleResize = () => {
       if (containerRef && containerRef.current) {
-        console.log("containerRef.current=", containerRef.current)
-        console.log("containerRef.current=", containerRef.current.clientWidth)
+        console.log("containerRef.current=", containerRef.current);
+        console.log("containerRef.current=", containerRef.current.clientWidth);
         const sceneWidth = containerRef.current.clientWidth;
         const sceneHeight = containerRef.current.clientHeight;
         cameraRef.current.aspect = sceneWidth / sceneHeight;
         cameraRef.current.updateProjectionMatrix();
         rendererRef.current.setSize(sceneWidth, sceneHeight);
       }
-
     };
 
     window.addEventListener("resize", handleResize);
@@ -2343,15 +2768,20 @@ const initFunc = forwardRef((props, ref) => {
       if (rendererRef.current) {
         rendererRef.current.render(sceneRef.current, cameraRef.current);
       }
-
     };
     animate();
     return () => {
-      rendererRef.current.domElement.removeEventListener("mousedown", onMouseDown);
-      rendererRef.current.domElement.removeEventListener("mousemove", onMouseMove);
+      rendererRef.current.domElement.removeEventListener(
+        "mousedown",
+        onMouseDown
+      );
+      rendererRef.current.domElement.removeEventListener(
+        "mousemove",
+        onMouseMove
+      );
       rendererRef.current.domElement.removeEventListener("mouseup", onMouseUp);
-    }
-  }, [modelName])
+    };
+  }, [modelName]);
 
   useEffect(() => {
     if (
@@ -2380,17 +2810,19 @@ const initFunc = forwardRef((props, ref) => {
           maxZ: findConsecutiveRangesT.maxZ,
         });
       }
-      let labels = createLabeledArray(dataDeepFloorplan.sizeImg, dataDeepFloorplan.wall[0].points)
+      let labels = createLabeledArray(
+        dataDeepFloorplan.sizeImg,
+        dataDeepFloorplan.wall[0].points
+      );
 
-      const findRectanglesT = findRectangles(labels)
-      setWallStoreV2(findRectanglesT)
+      const findRectanglesT = findRectangles(labels);
+      setWallStoreV2(findRectanglesT);
       setWallStore(wallThreejs);
       setGridSize(dataDeepFloorplan.sizeImg);
     }
   }, [dataDeepFloorplan]);
 
   useEffect(() => {
-    console.log("vao day roi ne nen ve tiep do");
     if (!containerRef.current) return;
 
     const sceneWidth = containerRef.current.clientWidth;
@@ -2897,8 +3329,7 @@ const initFunc = forwardRef((props, ref) => {
       try {
         controls.update();
         renderer.render(scene, camera);
-      } catch { }
-
+      } catch {}
     };
     animate();
 
@@ -2969,7 +3400,7 @@ const initFunc = forwardRef((props, ref) => {
             wallFillLightHelper4_2
           );
         }
-      } catch { }
+      } catch {}
       // renderer.dispose();
       // if (renderer.domElement) containerRef.current.removeChild(renderer.domElement);
     };
@@ -3012,7 +3443,7 @@ const initFunc = forwardRef((props, ref) => {
       selectedObjectRef.current = null;
     }
   };
-  useEffect(() => { }, [selectedObjectRef]);
+  useEffect(() => {}, [selectedObjectRef]);
 
   // expose hàm exportGLB cho App.js gọi
   useImperativeHandle(ref, () => ({
@@ -3071,12 +3502,12 @@ const initFunc = forwardRef((props, ref) => {
       throw new Error("Geometry không tồn tại");
     }
 
-    const posAttr = geometry.getAttribute('position');
+    geometry.applyMatrix4(mesh.matrixWorld); // ✅ apply trước
+
+    const posAttr = geometry.getAttribute("position"); // ✅ lấy sau khi transform
     if (!posAttr) {
       throw new Error("Geometry không có attribute position");
     }
-
-    geometry.applyMatrix4(mesh.matrixWorld);
 
     const vertices = Array.from(posAttr.array);
 
@@ -3100,14 +3531,25 @@ const initFunc = forwardRef((props, ref) => {
     const indices = [];
 
     for (let i = 0; i < trimesh.vertices.length; i += 3) {
-      vertices.push(trimesh.vertices[i], trimesh.vertices[i + 1], trimesh.vertices[i + 2]);
+      vertices.push(
+        trimesh.vertices[i],
+        trimesh.vertices[i + 1],
+        trimesh.vertices[i + 2]
+      );
     }
 
     for (let i = 0; i < trimesh.indices.length; i += 3) {
-      indices.push(trimesh.indices[i], trimesh.indices[i + 1], trimesh.indices[i + 2]);
+      indices.push(
+        trimesh.indices[i],
+        trimesh.indices[i + 1],
+        trimesh.indices[i + 2]
+      );
     }
 
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+    geometry.setAttribute(
+      "position",
+      new THREE.Float32BufferAttribute(vertices, 3)
+    );
     geometry.setIndex(indices);
     geometry.computeVertexNormals(); // tùy, không bắt buộc
 
@@ -3145,7 +3587,7 @@ const initFunc = forwardRef((props, ref) => {
     }
 
     geometry.setAttribute(
-      'position',
+      "position",
       new THREE.Float32BufferAttribute(vertices, 3)
     );
     geometry.setIndex(indices);
@@ -3161,9 +3603,23 @@ const initFunc = forwardRef((props, ref) => {
     const mesh = new THREE.Mesh(geometry, material);
     return mesh;
   }
+  // function createBufferGeometryFromMesh(mesh) {
+  //   if (!mesh.geometry) {
+  //     console.warn("Mesh không có geometry!");
+  //     return null;
+  //   }
+
+  //   // Clone geometry để tạo geometry mới độc lập
+  //   const geometry = mesh.geometry.clone();
+
+  //   // Nếu mesh có transform scale/rotation/position cần apply vào geometry, có thể áp dụng như này:
+  //   // geometry.applyMatrix4(mesh.matrixWorld);
+
+  //   return geometry;
+  // }
   function createBufferGeometryFromMesh(mesh) {
     if (!mesh.geometry) {
-      console.warn('Mesh không có geometry!');
+      console.warn("Mesh không có geometry!");
       return null;
     }
 
@@ -3171,14 +3627,20 @@ const initFunc = forwardRef((props, ref) => {
     const geometry = mesh.geometry.clone();
 
     // Nếu mesh có transform scale/rotation/position cần apply vào geometry, có thể áp dụng như này:
-    geometry.applyMatrix4(mesh.matrixWorld);
+    // Chuyển geometry sang trục toàn cục
+    // Lấy transform thế giới của mesh
+    const worldMatrix = new THREE.Matrix4();
+    mesh.updateWorldMatrix(true, false); // Đảm bảo matrixWorld mới nhất
+    worldMatrix.copy(mesh.matrixWorld);
+
+    geometry.applyMatrix4(worldMatrix);
 
     return geometry;
   }
   const handlerImportAddModel = async (event) => {
     const scene = sceneRef.current;
     if (!scene) return;
-    let arrMeshs = []
+    let arrMeshs = [];
     try {
       let scaleModel = 1;
       let scaleX_Model = 1,
@@ -3188,8 +3650,8 @@ const initFunc = forwardRef((props, ref) => {
       const modelOrigin = await new Promise(async (resolve) => {
         const file = event.target.files[0];
         if (!file) {
-          return resolve()
-        };
+          return resolve();
+        }
         let fileName = file.name;
         let typeFile = fileName.split(".").pop(); // 'txt'
         if (typeFile == "glb") {
@@ -3205,7 +3667,7 @@ const initFunc = forwardRef((props, ref) => {
               arrayBuffer,
               "",
               (gltf) => {
-                resolve(gltf.scene)
+                resolve(gltf.scene);
                 return;
                 resolve();
               },
@@ -3245,7 +3707,6 @@ const initFunc = forwardRef((props, ref) => {
             // ✅ Tạo manager và setURLModifier
             const manager = new THREE.LoadingManager();
             manager.setURLModifier((url) => {
-              console.log("Đã intercept:", url);
               const clean = url.split("/").pop();
               return blobUrlMap[clean] || url;
             });
@@ -3260,15 +3721,15 @@ const initFunc = forwardRef((props, ref) => {
 
             // Load từ gltfText
             const gltf = await loader.parseAsync(gltfText, ""); // path rỗng vì bạn dùng blob
-            resolve(gltf.scene)
-            return
-          } catch { }
+            resolve(gltf.scene);
+            return;
+          } catch {}
           resolve();
         }
       });
       if (modelOrigin) {
         try {
-          const model = modelOrigin.clone()
+          const model = modelOrigin.clone();
           const box = new THREE.Box3().setFromObject(model);
           const size = new THREE.Vector3();
           let sizeX = 1,
@@ -3283,14 +3744,14 @@ const initFunc = forwardRef((props, ref) => {
             scaleZ_Model = gridSize[1] / sizeZ;
             try {
               scaleModel = Math.min(scaleX_Model, scaleZ_Model);
-            } catch { }
+            } catch {}
           }
-          const useGroup = useGroupRef.current
+          const useGroup = useGroupRef.current;
           const meshSet = new Set();
           model.traverse((child) => {
             if (child.isMesh) {
               if (!meshSet.has(child)) {
-                arrMeshs.push(child)
+                arrMeshs.push(child);
               }
               // if (Array.isArray(child.material)) {
               //   child.material.forEach(mat => mat.wireframe = true);
@@ -3328,16 +3789,12 @@ const initFunc = forwardRef((props, ref) => {
           // visualMesh.position.copy(bodyCannon.position);
           // scene.add(visualMesh);
 
-
-
-
-
-
           // model.scale.set(0.001 * scaleModel, 0.001 * scaleModel, 0.001 * scaleModel);
           // model.scale.set(1 * scaleModel, 1 * scaleModel, 1 * scaleModel);
-          model.scale.set(scaleModel, scaleModel, scaleModel);
+          model.scale.set(scaleModel / 10, scaleModel / 10, scaleModel / 10);
+          // model.scale.set(1, 1, 1);
           //  model.scale.set(sizeX, sizeX, sizeX);
-          model.position.set(0, 0, 0);
+          model.position.set(gridSize[0] / 2, 0, gridSize[1] / 2);
           // scene.add(model);
           // modelRef.current = model;
           model.updateMatrix(); // <- update local matrix
@@ -3349,7 +3806,7 @@ const initFunc = forwardRef((props, ref) => {
             } else {
               model.updateMatrix(); // <- update local matrix
               model.updateMatrixWorld(true); // <- đệ quy cập nhật toàn bộ
-              model.disabledSplit = true
+              model.disabledSplit = true;
               model.filterBbox = true;
               const box2 = new THREE.Box3().setFromObject(model);
               const size2 = new THREE.Vector3();
@@ -3373,7 +3830,7 @@ const initFunc = forwardRef((props, ref) => {
               bboxMesh.userData.targetGroup = model;
               bboxMesh.userData.uuidTargetGroup = model.uuid;
               bboxMesh.userData.meshBoudingBoxOfGroup = model.uuid;
-              arrUuidBoxMeshGroup.current.push(bboxMesh.uuid)
+              arrUuidBoxMeshGroup.current.push(bboxMesh.uuid);
               model.userData.bboxMesh = bboxMesh;
               // scene.add(bboxMesh);
               simulatedMesh.current = model;
@@ -3383,115 +3840,267 @@ const initFunc = forwardRef((props, ref) => {
               pivot.position.copy(center); // tâm group
               scene.add(pivot);
               pivot.add(model);
-              pivot.add(bboxMesh)
-              model.position.sub(center);      // ✅ đúng: giữ vị trí cũ sau khi vào pivot
-              bboxMesh.position.copy(center);  // đặt về world
+              pivot.add(bboxMesh);
+              model.position.sub(center); // ✅ đúng: giữ vị trí cũ sau khi vào pivot
+              bboxMesh.position.copy(center); // đặt về world
               bboxMesh.position.sub(pivot.position); // ✅ chuyển về local trong pivot
 
               // Gán pivot vào userData
               model.userData.pivot = pivot;
               bboxMesh.userData.pivot = pivot; // để bắt sau này
-              selectedObjectRef.current = model
+              selectedObjectRef.current = model;
             }
           } else {
             try {
               if (childArr && childArr.length) {
-                [...childArr].forEach(objTT => {
-                  if (objTT.isMesh) {
+                childArr.forEach((objTTT) => {
+                  if (objTTT.isMesh) {
+                    objTTT.updateMatrixWorld(true);
+
+                    // Tạo geometry đã "bake" transform vào
+                    // const clonedGeometry = objTTT.geometry.clone();
+
+                    // // Apply toàn bộ matrixWorld vào geometry để giữ nguyên hình dáng/rotate
+                    // clonedGeometry.applyMatrix4(objTTT.matrixWorld);
+
+                    // // Reset transform về mặc định vì transform đã được bake rồi
+                    // const objTT = new CustomMesh(
+                    //   clonedGeometry,
+                    //   objTTT.material.clone()
+                    // );
+                    // // Tạo bản sao mới
+                    // const objTT = new CustomMesh(
+                    //   objTTT.geometry.clone(),
+                    //   objTTT.material.clone()
+                    // );
+                    // const objTT = new THREE.Mesh(
+                    //   objTTT.geometry.clone(),
+                    //   objTTT.material.clone()
+                    // );
+
+                    // // Copy transform
+                    // objTT.position.setFromMatrixPosition(objTTT.matrixWorld);
+                    // objTT.quaternion.copy(
+                    //   objTTT.getWorldQuaternion(new THREE.Quaternion())
+                    // );
+                    // objTT.scale.copy(objTTT.getWorldScale(new THREE.Vector3()));
+                    // objTT.updateMatrixWorld(true);
+                    // 1. Clone và bake transform
+                    const clonedGeometry = objTTT.geometry.clone();
+                    clonedGeometry.applyMatrix4(objTTT.matrixWorld);
+
+                    // 2. Tính lại bounding box
+                    clonedGeometry.computeBoundingBox();
+                    const bbox = clonedGeometry.boundingBox;
+                    const center = new THREE.Vector3();
+                    bbox.getCenter(center);
+
+                    // 3. Dịch geometry sao cho center về (0,0,0)
+                    clonedGeometry.translate(-center.x, -center.y, -center.z);
+
+                    // 4. Tạo mesh với pivot tại center của object
+                    const objTT = new CustomMesh(
+                      clonedGeometry,
+                      objTTT.material.clone()
+                    );
+
+                    // 5. Gán transform: mesh ở đúng vị trí cũ
+                    objTT.position.copy(center); // đây chính là vị trí thật sự
+                    objTT.rotation.set(0, 0, 0);
+                    objTT.scale.set(1, 1, 1);
+                    objTT.updateMatrixWorld(true);
+
+                    // Gán thông tin bổ sung
+                    objTT.name = objTTT.name;
+                    objTT.userData = { ...objTTT.userData };
                     objTT.castShadow = true;
                     objTT.material.side = THREE.DoubleSide;
                     objTT.userData.selectable = true;
                     objTT.userData.SelectionBox = true;
                     objTT.isSelectionBox = true;
-                    // const shapeT = createTrimesh(objTT);
-                    // const geometryT = createGeometryFromTrimesh(shapeT);
-                    // const materialT = new THREE.MeshBasicMaterial({ color: 'yellow', wireframe: true });
-                    // console.log("geometryT", geometryT)
 
-                    // const trimesh = new THREE.Mesh(geometryT, materialT);
-                    // console.log("trimesh", trimesh)
-                    // scene.attach(trimesh)
+                    // Tính bounding box world để dùng cho collider
+                    const bboxWorld = new THREE.Box3().setFromObject(objTT);
+                    const sizeWorld = new THREE.Vector3();
+                    bboxWorld.getSize(sizeWorld);
+                    const centerWorld = new THREE.Vector3();
+                    bboxWorld.getCenter(centerWorld);
 
-                    // // Đặt trimesh về local origin, quaternion identity
-                    // trimesh.position.set(0, 0, 0);
-                    // trimesh.quaternion.identity();
+                    // Tính bounding box local để debug (vẽ bounding box mesh)
+                    const geometry = objTT.geometry;
+                    geometry.computeBoundingBox();
+                    const bboxLocal = geometry.boundingBox;
+                    const sizeLocal = new THREE.Vector3();
+                    bboxLocal.getSize(sizeLocal);
+                    const centerLocal = new THREE.Vector3();
+                    bboxLocal.getCenter(centerLocal);
 
-                    // objTT.add(trimesh);
-                    // objTT.userData.trimesh = trimesh;
+                    // Tạo bounding box debug mesh đúng vị trí (dịch geometry về tâm)
+                    const geo = new THREE.BoxGeometry(
+                      sizeLocal.x,
+                      sizeLocal.y,
+                      sizeLocal.z
+                    );
+                    geo.translate(centerLocal.x, centerLocal.y, centerLocal.z); // Dịch geometry về đúng center
+                    const mat = new THREE.MeshBasicMaterial({
+                      color: "blue",
+                      wireframe: true,
+                    });
+                    const bboxMesh = new THREE.Mesh(geo, mat);
+                    bboxMesh.name = "DebugBoundingBox";
+                    bboxMesh.visible = false;
+                    objTT.add(bboxMesh);
 
-                    // const shape = createTrimesh(objTT);
-                    // Hiển thị để kiểm tra:
-                    // const helper = createMeshFromTrimesh(shape, 'yellow'); // hoặc 0x00ff00
-                    // helper.position.copy(objTT.getWorldPosition(new THREE.Vector3()));
-                    // helper.quaternion.copy(objTT.getWorldQuaternion(new THREE.Quaternion()));
-                    // child.add(helper)
-                    // child.userData.bboxMesh = helper
-                    // scene.attach(helper)
+                    // Thêm vào scene (chỉ objTT thôi, không objTTT)
+                    // --- Tạo collider Cannon.js theo bounding box world space ---
+                    const halfExtents = new CANNON.Vec3(
+                      sizeWorld.x / 2,
+                      sizeWorld.y / 2,
+                      sizeWorld.z / 2
+                    );
+                    const boxShape = new CANNON.Box(halfExtents);
 
-                    // const newGeometry = createBufferGeometryFromMesh(objTT);
-                    // if (newGeometry) {
-                    //   const material = new THREE.MeshBasicMaterial({ color: 'yellow', wireframe: true });
-                    //   const helperMesh = new THREE.Mesh(newGeometry, material);
-                    //   arrHelperUpdate.current.push({ helper: helperMesh, target: objTT })
-                    //   scene.add(helperMesh)
-                    // }
+                    const boxBody = new CANNON.Body({
+                      mass: 0, // static body
+                      shape: boxShape,
+                    });
 
+                    // Set vị trí và quaternion theo objTT (đã là world space)
+                    boxBody.position.set(
+                      centerWorld.x,
+                      centerWorld.y,
+                      centerWorld.z
+                    );
 
-                    // objTT.updateMatrixWorld(true); // Bắt buộc trước khi lấy bounding box
+                    const worldQuat = new THREE.Quaternion();
+                    objTT.getWorldQuaternion(worldQuat);
+                    boxBody.quaternion.set(
+                      worldQuat.x,
+                      worldQuat.y,
+                      worldQuat.z,
+                      worldQuat.w
+                    );
 
-                    // Tính bounding box trong không gian thế giới
+                    boxBody.aabbNeedsUpdate = true;
 
-                    // const worldPos = new THREE.Vector3();
-                    // const worldQuat = new THREE.Quaternion();
-                    // const worldScale = new THREE.Vector3();
+                    // Thêm collider vào world Cannon.js
+                    worldCannonRef.current.addBody(boxBody);
 
-                    // objTT.updateMatrixWorld(true);
-                    // objTT.matrixWorld.decompose(worldPos, worldQuat, worldScale);
-                    // scene.attach(objTT)
+                    // --- Lưu lại để đồng bộ nếu cần ---
+                    objects_TuTacDong_Ref.current.push({
+                      mesh: objTT,
+                      body: boxBody,
+                    });
+                    scene.attach(objTT);
+                    objTT.onTransformChange = (type, axis, newVal) => {
+                      if (
+                        useTransformFromHand.current &&
+                        objects_TuTacDong_Ref.current &&
+                        objects_TuTacDong_Ref.current.length
+                      ) {
+                        for (
+                          let i = 0;
+                          i < objects_TuTacDong_Ref.current.length;
+                          i++
+                        ) {
+                          if (
+                            objects_TuTacDong_Ref.current[i].mesh &&
+                            objects_TuTacDong_Ref.current[i].mesh.uuid ==
+                              objTT.uuid
+                          ) {
+                            const { mesh, body } =
+                              objects_TuTacDong_Ref.current[i];
+                            if (
+                              type == "position" ||
+                              type == "rotation" ||
+                              type == "quaternion"
+                            ) {
+                              updateTransformToFrom(mesh, body);
+                            } else if (type == "scale") {
+                              mesh.updateMatrixWorld(true);
+                              // 2. Tìm collider cũ (nếu có)
+                              const idx = i;
+                              if (idx === -1) {
+                                return;
+                              }
+                              const { body: oldBody } =
+                                objects_TuTacDong_Ref.current[idx];
 
-                    // // ✨ Gán lại transform theo world
-                    // objTT.position.copy(worldPos);
-                    // objTT.quaternion.copy(worldQuat);
-                    // objTT.scale.copy(worldScale);
+                              // 3. Loại bỏ body cũ khỏi world
+                              worldCannonRef.current.removeBody(oldBody);
 
-                    // // ✅ Đảm bảo transform đúng sau khi detach
-                    // objTT.updateMatrix();
-                    // objTT.updateMatrixWorld(true);
-                    // const box = new THREE.Box3().setFromObject(objTT);
-                    // const size = box.getSize(new THREE.Vector3());
-                    // const center = box.getCenter(new THREE.Vector3());
+                              // 1. Lấy bounding box LOCAL của geometry gốc
+                              const bbox =
+                                mesh.geometry.boundingBox ||
+                                mesh.geometry.clone().computeBoundingBox();
+                              const sizeLocal = new THREE.Vector3();
+                              bbox.getSize(sizeLocal);
+                              const centerLocal = new THREE.Vector3();
+                              bbox.getCenter(centerLocal);
 
-                    // // Tạo box geometry với đúng kích thước
-                    // const boxGeometry = new THREE.BoxGeometry(size.x, size.y, size.z);
-                    // const boxMaterial = new THREE.MeshBasicMaterial({
-                    //   color: 'yellow',
-                    //   wireframe: true,
-                    // });
-                    // const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
-                    // objTT.add(boxMesh)
-                    // boxMesh.position.copy(center);
-                    // // boxMesh.quaternion.copy(objTT.getWorldQuaternion(new THREE.Quaternion()))
-                    // boxMesh.userData.targetGroup = objTT;
-                    // boxMesh.userData.uuidTargetGroup = objTT.uuid;
-                    // objTT.userData.bboxMesh = boxMesh
-                    const bboxHelper = new THREE.BoxHelper(objTT, 'yellow');
-                    scene.add(bboxHelper);
-                    // scene.add(boxMesh);
+                              // 2. Lấy scale của mesh trong thế giới
+                              const scaleWorld = new THREE.Vector3();
+                              mesh.getWorldScale(scaleWorld);
+
+                              // 3. Tính lại size collider theo scale thực
+                              const sizeWorld = sizeLocal
+                                .clone()
+                                .multiply(scaleWorld);
+                              const centerWorld = centerLocal
+                                .clone()
+                                .applyMatrix4(mesh.matrixWorld);
+
+                              // 3. Tạo collider mới
+                              const halfExtents = new CANNON.Vec3(
+                                sizeWorld.x / 2,
+                                sizeWorld.y / 2,
+                                sizeWorld.z / 2
+                              );
+                              const shape = new CANNON.Box(halfExtents);
+                              const newBody = new CANNON.Body({
+                                mass: 0,
+                                shape,
+                              });
+
+                              // 4. Đặt collider đúng vị trí & xoay
+                              newBody.position.set(
+                                centerWorld.x,
+                                centerWorld.y,
+                                centerWorld.z
+                              );
+                              const quat = new THREE.Quaternion();
+                              mesh.getWorldQuaternion(quat);
+                              newBody.quaternion.set(
+                                quat.x,
+                                quat.y,
+                                quat.z,
+                                quat.w
+                              );
+                              newBody.aabbNeedsUpdate = true;
+
+                              // 7. Thêm vào world mới
+                              worldCannonRef.current.addBody(newBody);
+                              objects_TuTacDong_Ref.current[idx].body = newBody;
+                            }
+                            break;
+                          }
+                        }
+                      }
+                    };
                   } else {
-                    scene.attach(objTT)
+                    // scene.add(objTTT);
                   }
-
-                })
+                });
               }
             } catch {
               // scene.add(model);
             }
           }
         } catch (e) {
-          console.log("e", e)
+          console.log("e", e);
         }
       }
-    } catch { }
+    } catch {}
     // try {
     //   if (arrMeshs && arrMeshs.length) {
     //     arrMeshs.forEach(child => {
@@ -3851,13 +4460,13 @@ const initFunc = forwardRef((props, ref) => {
           setWallStore(responseJson.data.result);
         }
         if (responseJson && responseJson.data && responseJson.data.array) {
-          const findRectanglesT = findRectangles(responseJson.data.array)
+          const findRectanglesT = findRectangles(responseJson.data.array);
           setWallStoreV2(findRectanglesT);
         }
       } catch (error) {
         console.error("Lỗi upload:", error);
       }
-    } catch { }
+    } catch {}
   }
   function setPositionY0() {
     const obj = selectedObjectRef.current;
@@ -3892,8 +4501,12 @@ const initFunc = forwardRef((props, ref) => {
   }
   const addDoor = async () => {
     try {
-      let points = []
-      points = createLabeledArray(dataDeepFloorplan.sizeImg, dataDeepFloorplan["door/window"][0].points, 9)
+      let points = [];
+      points = createLabeledArray(
+        dataDeepFloorplan.sizeImg,
+        dataDeepFloorplan["door/window"][0].points,
+        9
+      );
       if (!points || !points.length) return;
       let dataSend = {
         points: points,
@@ -3911,32 +4524,41 @@ const initFunc = forwardRef((props, ref) => {
         const responseJson = await response.json();
         if (responseJson && responseJson.data) {
           const labelAs = 9;
-          const findRectanglesT = findRectangles(responseJson.data, labelAs)
-          setpositionDoorWindow(findRectanglesT)
+          const findRectanglesT = findRectangles(responseJson.data, labelAs);
+          setpositionDoorWindow(findRectanglesT);
         }
-        console.log("responseJson", responseJson)
+        console.log("responseJson", responseJson);
       } catch (error) {
         console.error("Lỗi upload:", error);
       }
-    } catch { }
-  }
+    } catch {}
+  };
   const [selectedRefObJSelected, setselectedRefObJSelected] = useState(null);
   const [positionSelectObjet, setpositionSelectObjet] = useState([0, 0, 0]);
 
   useEffect(() => {
-    console.log("watchselectedRefObJSelected ", selectedRefObJSelected)
+    console.log("watchselectedRefObJSelected ", selectedRefObJSelected);
     if (selectedRefObJSelected) {
-      const obj = selectedRefObJSelected.userData && selectedRefObJSelected.userData.pivot ? selectedRefObJSelected.userData.pivot : selectedRefObJSelected
+      const obj =
+        selectedRefObJSelected.userData && selectedRefObJSelected.userData.pivot
+          ? selectedRefObJSelected.userData.pivot
+          : selectedRefObJSelected;
       const pos = obj.position.toArray();
       setpositionSelectObjet(pos);
     }
-  }, [selectedRefObJSelected])
+  }, [selectedRefObJSelected]);
   useEffect(() => {
     if (selectedRefObJSelected) {
-      const obj = selectedRefObJSelected.userData && selectedRefObJSelected.userData.pivot ? selectedRefObJSelected.userData.pivot : selectedRefObJSelected
-      obj.position.set(...positionSelectObjet)
+      const obj =
+        selectedRefObJSelected.userData && selectedRefObJSelected.userData.pivot
+          ? selectedRefObJSelected.userData.pivot
+          : selectedRefObJSelected;
+      // obj.position.set(...positionSelectObjet);
+      obj.position.x = positionSelectObjet[0]
+      obj.position.y=positionSelectObjet[1]
+      obj.position.z=positionSelectObjet[2]
     }
-  }, [positionSelectObjet])
+  }, [positionSelectObjet]);
   const handleChangeSelectObject = (index, value) => {
     const newPos = [...positionSelectObjet];
     newPos[index] = parseFloat(value);
@@ -3948,8 +4570,8 @@ const initFunc = forwardRef((props, ref) => {
     if (!selectedRefObJSelected) return;
 
     return (
-      <div className='flex items-center'>
-        {['X', 'Y', 'Z'].map((axis, i) => (
+      <div className="flex items-center">
+        {["X", "Y", "Z"].map((axis, i) => (
           <div key={axis}>
             <label>{axis}: </label>
             <input
@@ -3967,65 +4589,82 @@ const initFunc = forwardRef((props, ref) => {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
   const objects_RoiTuDo_Ref = useRef([]);
+  const objects_TuTacDong_Ref = useRef([]);
+  const dropRandomObjectInterValRef = useRef(null);
+  const dropRandomObjectInterCheckValRef = useRef(false);
   // Hàm thả vật thể ngẫu nhiên hình cầu hoặc tam giác
   const dropRandomObject = () => {
-    const scene = sceneRef.current;
-    const world = worldCannonRef.current;
-    if (!scene || !world) return;
-    const type = Math.random() < 0.5 ? "sphere" : "pyramid";
-    const color = Math.random() * 0xffffff;
-
-    // Vị trí rơi random gần trung tâm ±30
-    const xCeil = Math.ceil(gridSize[0] / 2)
-    const zCeil = Math.ceil(gridSize[1] / 2)
-    const x = randomInt(-xCeil, xCeil) + xCeil;
-    const z = randomInt(-zCeil, zCeil) + zCeil;
-    const y = 50;
-
-    let mesh, body;
-
-    if (type === "sphere") {
-      const radius = 3 + Math.random() * 2;
-      // Three.js mesh
-      const sphereGeo = new THREE.SphereGeometry(radius, 50, 50);
-      const sphereMat = new THREE.MeshStandardMaterial({ color });
-      mesh = new THREE.Mesh(sphereGeo, sphereMat);
-      mesh.position.set(x, y, z);
-      scene.add(mesh);
-
-      // Cannon body
-      const shape = new CANNON.Sphere(radius);
-      body = new CANNON.Body({
-        mass: 1,
-        shape,
-        position: new CANNON.Vec3(x, y, z),
-        material: new CANNON.Material({ friction: 0.4, restitution: 0.7 }),
-      });
-      world.addBody(body);
-    } else {
-      // Pyramid dạng hình chóp tam giác (cylinder 3 cạnh)
-      const radius = 5;
-      const height = 7;
-      const coneGeo = new THREE.ConeGeometry(radius, height, 3);
-      const coneMat = new THREE.MeshStandardMaterial({ color });
-      mesh = new THREE.Mesh(coneGeo, coneMat);
-      mesh.position.set(x, y, z);
-      scene.add(mesh);
-
-      // Cannon shape gần đúng: cylinder 3 cạnh
-      const shape = new CANNON.Cylinder(0.1, radius, height, 3);
-      body = new CANNON.Body({
-        mass: 1,
-        shape,
-        position: new CANNON.Vec3(x, y, z),
-        material: new CANNON.Material({ friction: 0.4, restitution: 0.5 }),
-      });
-      // Xoay thân thẳng đứng
-      body.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
-      world.addBody(body);
+    dropRandomObjectInterCheckValRef.current =
+      !dropRandomObjectInterCheckValRef.current;
+    if (!dropRandomObjectInterCheckValRef.current) {
+      if (dropRandomObjectInterValRef.current) {
+        clearInterval(dropRandomObjectInterValRef.current);
+      }
+      return;
     }
-    objects_RoiTuDo_Ref.current.push({ mesh, body });
+    dropRandomObjectInterValRef.current = setInterval(() => {
+      const scene = sceneRef.current;
+      const world = worldCannonRef.current;
+      if (!scene || !world) return;
+      const type = Math.random() < 0.5 ? "sphere" : "pyramid";
+      const color = Math.random() * 0xffffff;
+
+      // Vị trí rơi random gần trung tâm ±30
+      const xCeil = Math.ceil(gridSize[0] / 2);
+      const zCeil = Math.ceil(gridSize[1] / 2);
+      const x = randomInt(-xCeil, xCeil) + xCeil;
+      const z = randomInt(-zCeil, zCeil) + zCeil;
+      const y = 50;
+
+      let mesh, body;
+
+      if (type === "sphere") {
+        const radius = 3 + Math.random() * 2;
+        // Three.js mesh
+        const sphereGeo = new THREE.SphereGeometry(radius, 50, 50);
+        const sphereMat = new THREE.MeshStandardMaterial({ color });
+        mesh = new THREE.Mesh(sphereGeo, sphereMat);
+        mesh.position.set(x, y, z);
+        scene.add(mesh);
+
+        // Cannon body
+        const shape = new CANNON.Sphere(radius);
+        body = new CANNON.Body({
+          mass: 1,
+          shape,
+          position: new CANNON.Vec3(x, y, z),
+          material: new CANNON.Material({ friction: 0.4, restitution: 0.7 }),
+        });
+        world.addBody(body);
+      } else {
+        // Pyramid dạng hình chóp tam giác (cylinder 3 cạnh)
+        const radius = 5;
+        const height = 7;
+        const coneGeo = new THREE.ConeGeometry(radius, height, 3);
+        const coneMat = new THREE.MeshStandardMaterial({ color });
+        mesh = new THREE.Mesh(coneGeo, coneMat);
+        mesh.position.set(x, y, z);
+        scene.add(mesh);
+
+        // Cannon shape gần đúng: cylinder 3 cạnh
+        const shape = new CANNON.Cylinder(0.1, radius, height, 3);
+        body = new CANNON.Body({
+          mass: 1,
+          shape,
+          position: new CANNON.Vec3(x, y, z),
+          material: new CANNON.Material({ friction: 0.4, restitution: 0.5 }),
+        });
+        // Xoay thân thẳng đứng
+        body.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+        world.addBody(body);
+      }
+      objects_RoiTuDo_Ref.current.push({ mesh, body });
+    }, 500);
   };
+  function dichuyengaunhien() {
+    const boxes = dovatdichuyen.current;
+    startRandomBoxMovement(boxes, 400);
+  }
   return (
     <>
       <div
@@ -4242,7 +4881,12 @@ const initFunc = forwardRef((props, ref) => {
             <Button onClick={smoothWall} size="small" variant="contained">
               Smooth Wall
             </Button>
-            <Button className="!ml-2" onClick={addDoor} size="small" variant="contained">
+            <Button
+              className="!ml-2"
+              onClick={addDoor}
+              size="small"
+              variant="contained"
+            >
               Add Door
             </Button>
           </div>
@@ -4350,24 +4994,26 @@ const initFunc = forwardRef((props, ref) => {
           </div>
         </div>
         <div className=" top-[290px] left-[15px] formControlLabel-display-grid flex-items-center">
-          <div>Mouse 3D Position: {mousePos3D.x.toFixed(2)},{" "}
+          <div>
+            Mouse 3D Position: {mousePos3D.x.toFixed(2)},{" "}
             {mousePos3D.y.toFixed(2)}, {mousePos3D.z.toFixed(2)}{" "}
           </div>
-          <div className="flex items-center"> <FormControlLabel
-            control={
-              <Switch
-                checked={splitGroup}
-                onChange={(e) => setsplitGroup(e.target.checked)}
-              />
-            }
-            label="Split Group: "
-            labelPlacement="start"
-          />
-            <div style={{ marginLeft: '20px' }}>
-              {renderPositionInputs()}
-            </div>
+          <div className="flex items-center">
+            {" "}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={splitGroup}
+                  onChange={(e) => setsplitGroup(e.target.checked)}
+                />
+              }
+              label="Split Group: "
+              labelPlacement="start"
+            />
+            <div style={{ marginLeft: "20px" }}>{renderPositionInputs()}</div>
           </div>
           <Button onClick={dropRandomObject}>Thả ngẫu nhiên vật</Button>
+          <Button onClick={dichuyengaunhien}>Di chuyen ngau nhien</Button>
         </div>
         <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
       </div>

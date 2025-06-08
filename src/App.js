@@ -9,19 +9,20 @@
 // import Test6 from "./components/test6";
 // import Test7 from "./components/test7";
 // import Test8 from "./components/test8";
+// import Test9 from "./components/test9";
+// import Test10 from "./components/test10";
 // import Light from "./components/light";
 // import ExtrudeGeometry from "./components/ExtrudeGeometry";
 // import AddGroupThree from "./components/addGroupThree";
 // import AddGroupThree2 from "./components/addGroupThree2";
 // import LearnReactjs from "./components/learn-react";
 // import SelectionBoxTest1 from "./components/selectionBoxTest1";
-// import FloorplanViewer2 from './components/floorplanViewer2';
-// import FloorplanViewer3 from './components/floorplanViewer3';
-
+// import FloorplanViewer2 from "./components/floorplanViewer2";
+// import FloorplanViewer3 from "./components/floorplanViewer3";
 
 // function App() {
 //   const testRef = useRef();
-//   const [dataDeepFloorplan, setDataDeepFloorplan] = useState({})
+//   const [dataDeepFloorplan, setDataDeepFloorplan] = useState({});
 //   // const mountRef = useRef(null);
 
 //   // useEffect(() => {
@@ -117,8 +118,8 @@
 //       testRef.current.exportGLB();
 //     }
 //   };
-//   const [wallHeight, setWallHeight] = useState([0, 5])
-//   const [wallHeightT, setWallHeightT] = useState([0, 5])
+//   const [wallHeight, setWallHeight] = useState([0, 5]);
+//   const [wallHeightT, setWallHeightT] = useState([0, 5]);
 //   const refExportModel = useRef();
 //   return (
 //     <>
@@ -161,8 +162,10 @@
 //         {/* <Test4 /> */}
 //         {/* <Test5 ref={testRef} /> */}
 //         {/* <Test6 /> */}
-//         <Test7 />
+//         {/* <Test7 /> */}
 //         {/* <Test8 /> */}
+//         {/* <Test9 /> */}
+//         <Test10 />
 //         {/* <ExtrudeGeometry /> */}
 
 //         {/* <Light /> */}
@@ -172,7 +175,6 @@
 //         {/* <SelectionBoxTest1 /> */}
 //         {/* <FloorplanViewer2 dataDeepFloorplan={dataDeepFloorplan} wallHeight={wallHeight[1]} ref={refExportModel} /> */}
 //         {/* <FloorplanViewer3 dataDeepFloorplan={dataDeepFloorplan} wallHeight={wallHeight[1]} ref={refExportModel} /> */}
-
 //       </div>
 //     </>
 //   );
@@ -180,9 +182,7 @@
 
 // export default App;
 
-
-
-// App.js
+// // App.js
 import React, { useRef, useState } from 'react';
 import FloorplanViewer from './components/floorplanViewer';
 import FloorplanViewer2 from './components/floorplanViewer2';
@@ -309,7 +309,6 @@ function createLabeledArray(m, n, indices) {
 
   return array;
 }
-
 
 function App() {
   const refExportModel = useRef();
