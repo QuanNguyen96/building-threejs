@@ -162,10 +162,11 @@
 //         {/* <Test4 /> */}
 //         {/* <Test5 ref={testRef} /> */}
 //         {/* <Test6 /> */}
-//         {/* <Test7 /> */}
+//         <Test7 />
 //         {/* <Test8 /> */}
 //         {/* <Test9 /> */}
-//         <Test10 />
+//         {/* <Test10 /> */}
+
 //         {/* <ExtrudeGeometry /> */}
 
 //         {/* <Light /> */}

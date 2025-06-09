@@ -45,7 +45,7 @@ import { ColorPicker, useColor } from "react-color-palette";
 import { GUI } from "three/examples/jsm/libs/lil-gui.module.min.js";
 import "react-color-palette/css";
 import JSZip from "jszip";
-import { ModelNode } from "three/webgpu";
+import { MeshMatcapMaterial, ModelNode } from "three/webgpu";
 import { gapSize } from "three/tsl";
 
 const Transition = React.forwardRef(function Transition(
@@ -576,41 +576,18 @@ function centerGeometryKeepY(geometry) {
   // Trả về offset mà helper cần cộng, Y giữ 0
   return new THREE.Vector3(center.x, 0, center.z);
 }
-function startRandomBoxMovement(boxes, gridSize, step = 1) {
-  const intervalId = setInterval(() => {
-    boxes.forEach((box) => {
-      const axis = Math.random() > 0.5 ? "x" : "z";
-      const sign = Math.random() > 0.5 ? 1 : -1;
 
-      const currentPos = box.position.clone();
-      let newValue = currentPos[axis] + step * sign;
 
-      if (newValue < 0 || newValue > gridSize) {
-        // Nếu vượt biên thì quay đầu lại
-        newValue = THREE.MathUtils.clamp(
-          currentPos[axis] - step * sign,
-          0,
-          gridSize
-        );
-      }
-
-      // Set lại bằng .set để đảm bảo trigger các transform watcher
-      if (axis === "x") {
-        box.position.set(newValue, currentPos.y, currentPos.z);
-      } else {
-        box.position.set(currentPos.x, currentPos.y, newValue);
-      }
-    });
-  }, 500);
-
-  return intervalId;
-}
 
 
 // export default function FloorplanViewer({ dataDeepFloorplan, wallHeight }) {
 const initFunc = forwardRef((props, ref) => {
+  let sortingManager = null;
   const dispatch = useDispatch();
   const dovatdichuyen = useRef([]);
+  const dovatsapxep = useRef([]);
+  const startRandomBoxMovementIntervalCheck = useRef(false)
+  const startRandomBoxMovementIntervalRef = useRef()
   const arrBox3HelperAutoUpdate = useRef([]);
   const modelThreeCommon = useSelector((state) => state.modelThreejs.models);
   const modelThreeCommonRef = useRef({});
@@ -638,11 +615,11 @@ const initFunc = forwardRef((props, ref) => {
   const [wallStore, setWallStore] = useState([
     // { start: [0, 90], end: [0, 100] },
     // { start: [0, 200], end: [200, 0] },
-    // { start: [0, 0], end: [0, 400] },
-    // //
-    // { start: [0, 400], end: [400, 400] },
-    // { start: [400, 400], end: [400, 0] },
-    // { start: [400, 0], end: [0, 0] }
+    { start: [0, 0], end: [0, 400] },
+    //
+    { start: [0, 400], end: [400, 400] },
+    { start: [400, 400], end: [400, 0] },
+    { start: [400, 0], end: [0, 0] }
   ]);
   const [floorStore, setFloorStore] = useState({});
   // const [gridSize, setGridSize] = useState([10, 10]);
@@ -708,6 +685,33 @@ const initFunc = forwardRef((props, ref) => {
     });
 
     return meshArray;
+  }
+  function startRandomBoxMovement(boxes, gridSize, step = 1) {
+    startRandomBoxMovementIntervalRef.current = setInterval(() => {
+      boxes.forEach((box) => {
+        const axis = Math.random() > 0.5 ? "x" : "z";
+        const sign = Math.random() > 0.5 ? 1 : -1;
+
+        const currentPos = box.position.clone();
+        let newValue = currentPos[axis] + step * sign;
+
+        if (newValue < 0 || newValue > gridSize) {
+          // Nếu vượt biên thì quay đầu lại
+          newValue = THREE.MathUtils.clamp(
+            currentPos[axis] - step * sign,
+            0,
+            gridSize
+          );
+        }
+
+        // Set lại bằng .set để đảm bảo trigger các transform watcher
+        if (axis === "x") {
+          box.position.set(newValue, currentPos.y, currentPos.z);
+        } else {
+          box.position.set(currentPos.x, currentPos.y, newValue);
+        }
+      });
+    }, 500);
   }
   function Wall3({
     x,
@@ -791,6 +795,20 @@ const initFunc = forwardRef((props, ref) => {
       );
       const shape = new CANNON.Box(halfExtents);
 
+      const floorMaterial = new CANNON.Material('floorMaterial');
+      const boxMaterial = new CANNON.Material('boxMaterial');
+      const contactMaterial = new CANNON.ContactMaterial(
+        floorMaterial,
+        boxMaterial,
+        {
+          friction: 1,       // ma sát: 0 (trơn) → 1 (rất nhám)
+          restitution: 0.0,    // độ nảy: 0 (không nảy), 1 (nảy hết lực)
+        }
+      );
+      // Nhóm collision
+      const GROUP_TERRAIN = 1;
+      const GROUP_DYNAMIC = 2;
+
       const body = new CANNON.Body({
         mass: 0, // static:0, và có va chạm là 1  => vẫn là vật cứng cản được
         position: new CANNON.Vec3(
@@ -799,6 +817,11 @@ const initFunc = forwardRef((props, ref) => {
           mesh.position.z
         ),
         shape,
+        material: contactMaterial,
+        linearDamping: 0.99,   // Giảm trôi
+        angularDamping: 1, // Giảm lắc khi va chạm
+        // collisionFilterGroup: GROUP_TERRAIN,
+        // collisionFilterMask: GROUP_DYNAMIC, // chỉ va chạm với vật động
       });
 
       physicsWorld.addBody(body);
@@ -862,47 +885,201 @@ const initFunc = forwardRef((props, ref) => {
   useEffect(() => {
     useGroupRef.current = useGroup;
   }, [useGroup]);
+  // useEffect(() => {
+  //   console.log("splitGroupsplitGroup")
+  //   if (!splitGroup || useGroupRef.current) return;
+  //   splitGroupRef.current = splitGroup;
+  //   console.log("splitGroupRef", splitGroupRef)
+  //   let groups = selectedObjectRef.current;
+  //   let scene = sceneRef.current;
+  //   // let children = getAllUniqueMeshes(groups);
+  //   const meshSet = new Set();
+  //   groups.traverse((child) => {
+  //     if (!meshSet.has(child)) {
+  //       meshSet.add(child);
+  //     }
+  //   });
+  //   const childArr = Array.from(meshSet);
+  //   if (
+  //     groups &&
+  //     groups.type == "Group" &&
+  //     childArr &&
+  //     childArr.length &&
+  //     scene
+  //   ) {
+  //     childArr.forEach((objTT) => {
+  //       try {
+  //         objTT.castShadow = true;
+  //         objTT.material.side = THREE.DoubleSide;
+  //         objTT.isSelectionBox = true;
+  //         objTT.userData.selectable = true;
+  //         objTT.userData.SelectionBox = true;
+  //         objTT.userData.isChildGroup = null;
+  //         objTT.userData.uuidTargetGroup = null;
+  //         objTT.userData.targetGroup = null;
+  //       } catch { }
+  //       scene.attach(objTT);
+  //     });
+  //     if (groups.userData && groups.userData.bboxMesh) {
+  //       scene.remove(groups.userData.bboxMesh);
+  //     }
+  //     if (groups.userData && groups.userData.pivot) {
+  //       scene.remove(groups.userData.pivot);
+  //     }
+  //   }
+  // }, [splitGroup]);
+  // useEffect(() => {
+  //   if (!splitGroup || useGroupRef.current) return;
+  //   splitGroupRef.current = splitGroup;
+
+  //   const groups = selectedObjectRef.current;
+  //   const scene = sceneRef.current;
+
+  //   const meshSet = new Set();
+  //   groups?.traverse((child) => {
+  //     if (child.isMesh) {
+  //       meshSet.add(child);
+  //     }
+  //   });
+
+  //   const childArr = Array.from(meshSet);
+
+  //   if (
+  //     groups &&
+  //     groups.type === "Group" &&
+  //     childArr.length &&
+  //     scene
+  //   ) {
+  //     childArr.forEach((objTT) => {
+  //       // 1. Lưu transform thế giới
+  //       objTT.updateMatrixWorld();
+  //       const worldPos = new THREE.Vector3();
+  //       const worldQuat = new THREE.Quaternion();
+  //       const worldScale = new THREE.Vector3();
+  //       objTT.matrixWorld.decompose(worldPos, worldQuat, worldScale);
+
+  //       // 2. Apply các thuộc tính tùy chỉnh
+  //       try {
+  //         objTT.castShadow = true;
+  //         objTT.material.side = THREE.DoubleSide;
+  //         objTT.isSelectionBox = true;
+  //         objTT.userData.selectable = true;
+  //         objTT.userData.SelectionBox = true;
+  //         objTT.userData.isChildGroup = null;
+  //         objTT.userData.uuidTargetGroup = null;
+  //         objTT.userData.targetGroup = null;
+  //       } catch (err) {
+  //         console.warn("Error applying mesh properties:", err);
+  //       }
+
+  //       // 3. Detach khỏi group → đưa ra scene
+  //       scene.attach(objTT);
+
+  //       // 4. Gán lại transform world cho mesh
+  //       objTT.position.copy(worldPos);
+  //       objTT.quaternion.copy(worldQuat);
+  //       objTT.scale.copy(worldScale);
+
+  //       // 5. Đồng bộ lại body tương ứng trong objects_2_RoiTuDo_Auto_Ref
+  //       const item = objects_2_RoiTuDo_Auto_Ref.current.find(
+  //         (entry) => entry.mesh.uuid === objTT.uuid
+  //       );
+  //       if (item && item.body) {
+  //         item.body.position.copy(worldPos);
+  //         item.body.quaternion.copy(worldQuat);
+  //         item.body.aabbNeedsUpdate = true;
+  //       } else {
+  //         console.warn("⚠️ Không tìm thấy body tương ứng với mesh khi split:", objTT.name || objTT.uuid);
+  //       }
+  //     });
+
+  //     // 6. Xóa bbox/pivot nếu có
+  //     if (groups.userData?.bboxMesh) {
+  //       scene.remove(groups.userData.bboxMesh);
+  //     }
+  //     if (groups.userData?.pivot) {
+  //       scene.remove(groups.userData.pivot);
+  //     }
+  //   }
+  // }, [splitGroup]);
+
+
   useEffect(() => {
     if (!splitGroup || useGroupRef.current) return;
     splitGroupRef.current = splitGroup;
-    let groups = selectedObjectRef.current;
-    let scene = sceneRef.current;
-    // let children = getAllUniqueMeshes(groups);
+
+    const groups = selectedObjectRef.current;
+    const scene = sceneRef.current;
     const meshSet = new Set();
-    groups.traverse((child) => {
-      if (!meshSet.has(child)) {
+
+    groups?.traverse((child) => {
+      if (child.isMesh) {
         meshSet.add(child);
       }
     });
+
     const childArr = Array.from(meshSet);
+
     if (
       groups &&
-      groups.type == "Group" &&
-      childArr &&
+      groups.type === "Group" &&
       childArr.length &&
       scene
     ) {
       childArr.forEach((objTT) => {
-        try {
-          objTT.castShadow = true;
-          objTT.material.side = THREE.DoubleSide;
-          objTT.isSelectionBox = true;
-          objTT.userData.selectable = true;
-          objTT.userData.SelectionBox = true;
-          objTT.userData.isChildGroup = null;
-          objTT.userData.uuidTargetGroup = null;
-          objTT.userData.targetGroup = null;
-        } catch { }
+        // 1. Lấy transform thế giới
+        objTT.updateMatrixWorld(true);
+        const worldPos = new THREE.Vector3();
+        const worldQuat = new THREE.Quaternion();
+        const worldScale = new THREE.Vector3();
+        objTT.matrixWorld.decompose(worldPos, worldQuat, worldScale);
+
+        // 2. Detach khỏi group
         scene.attach(objTT);
+
+        // 3. Gán lại transform world cho mesh
+        objTT.position.copy(worldPos);
+        objTT.quaternion.copy(worldQuat);
+        objTT.scale.copy(worldScale);
+
+        // 4. Cập nhật lại Cannon body
+        const bodyEntry = objects_2_RoiTuDo_Auto_Ref.current.find(
+          (entry) => entry.mesh.uuid === objTT.uuid
+        );
+
+        if (bodyEntry?.body instanceof CANNON.Body) {
+          const body = bodyEntry.body;
+          body.position.set(worldPos.x, worldPos.y, worldPos.z);
+          body.quaternion.set(worldQuat.x, worldQuat.y, worldQuat.z, worldQuat.w);
+          body.velocity.set(0, 0, 0);
+          body.angularVelocity.set(0, 0, 0);
+          body.aabbNeedsUpdate = true;
+        }
+
+        // 5. Gán flag nếu cần (ví dụ để skip animate)
+        objTT.userData.justDetached = true;
+
+        // 6. Một số flag khác
+        objTT.castShadow = true;
+        objTT.material.side = THREE.DoubleSide;
+        objTT.userData.selectable = true;
+        objTT.userData.SelectionBox = true;
+        objTT.userData.isChildGroup = null;
+        objTT.userData.uuidTargetGroup = null;
+        objTT.userData.targetGroup = null;
       });
-      if (groups.userData && groups.userData.bboxMesh) {
+
+      // 7. Cleanup group metadata
+      if (groups.userData?.bboxMesh) {
         scene.remove(groups.userData.bboxMesh);
       }
-      if (groups.userData && groups.userData.pivot) {
+      if (groups.userData?.pivot) {
         scene.remove(groups.userData.pivot);
       }
     }
   }, [splitGroup]);
+
+
   function useTrackMouse3D(containerRef, camera, onUpdatePosition) {
     useEffect(() => {
       if (!containerRef.current) return;
@@ -1063,9 +1240,25 @@ const initFunc = forwardRef((props, ref) => {
     const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
     const shape = new CANNON.Box(halfExtents);
 
+
+    const floorMaterial = new CANNON.Material('floorMaterial');
+    // Material cho vật
+    const boxMaterial = new CANNON.Material('boxMaterial');
+    const contactMaterial = new CANNON.ContactMaterial(
+      floorMaterial,
+      boxMaterial,
+      {
+        friction: 1,       // ma sát: 0 (trơn) → 1 (rất nhám)
+        restitution: 0.0,    // độ nảy: 0 (không nảy), 1 (nảy hết lực)
+      }
+    );
+
     // Tạo body
     const body = new CANNON.Body({
-      mass: 0,
+      mass: 10000, // static body
+      material: contactMaterial,
+      linearDamping: 0.99,   // Giảm trôi
+      angularDamping: 0.99, // Giảm lắc khi va chạm
       shape: shape,
     });
 
@@ -1104,6 +1297,7 @@ const initFunc = forwardRef((props, ref) => {
     const floorBody = new CANNON.Body({
       mass: 0,
       shape: new CANNON.Plane(),
+      position: new CANNON.Vec3(0, 0, 0), // đặt nền ở y=2
     });
     floorBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
     world.addBody(floorBody);
@@ -1148,7 +1342,7 @@ const initFunc = forwardRef((props, ref) => {
     const cannonDebugger = CannonDebugger(scene, worldCannonRef.current, {
       color: "black", // Màu collider
     });
-    cannonDebugger.visible = false
+    // cannonDebugger.visible = false
 
     // controls
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -1184,9 +1378,28 @@ const initFunc = forwardRef((props, ref) => {
       // 3. Tạo shape và body Cannon.js
       const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
       const boxShape = new CANNON.Box(halfExtents);
+      // Material cho nền
+      const floorMaterial = new CANNON.Material('floorMaterial');
+      // Material cho vật
+      const boxMaterial = new CANNON.Material('boxMaterial');
+      const contactMaterial = new CANNON.ContactMaterial(
+        floorMaterial,
+        boxMaterial,
+        {
+          friction: 1,       // ma sát: 0 (trơn) → 1 (rất nhám)
+          restitution: 0.0,    // độ nảy: 0 (không nảy), 1 (nảy hết lực)
+        }
+      );
+      // mass được coi như là trọng lượng của vật để chịu lực g xét từ trước
       const boxBody = new CANNON.Body({
-        mass: 0, // đổi thành 0 nếu muốn đứng yên
+        mass: 1000, // đổi thành 0 nếu muốn đứng yên =>0 thì ko chịu tác động của lực, 1 thì chịu tác động của lực theo cách set có dùng lực hay ko
+        // type: CANNON.Body.KINEMATIC,
+        // type: CANNON.Body.STATIC,
         shape: boxShape,
+        // material: new CANNON.Material('noBounce'),
+        material: contactMaterial,
+        linearDamping: 0.99,   // Giảm trôi
+        angularDamping: 0.99 // Giảm lắc khi va chạm
       });
 
       // 4. Đặt vị trí vật lý giống mesh
@@ -1199,86 +1412,128 @@ const initFunc = forwardRef((props, ref) => {
         mesh: mesh,
         body: boxBody,
       });
+      objects_2_RoiTuDo_Auto_Ref.current.push({
+        mesh: mesh,
+        body: boxBody,
+      });
+      dovatsapxep.current.push({
+        mesh: mesh,
+        body: boxBody
+      })
       mesh.onTransformChange = (type, axis, newVal) => {
-        console.log("onTransformChange")
-        if (
-          // useTransformFromHand.current &&
-          objects_TuTacDong_Ref.current &&
-          objects_TuTacDong_Ref.current.length
-        ) {
-          for (let i = 0; i < objects_TuTacDong_Ref.current.length; i++) {
-            if (
-              objects_TuTacDong_Ref.current[i].mesh &&
-              objects_TuTacDong_Ref.current[i].mesh.uuid == mesh.uuid
-            ) {
-              const { mesh, body } = objects_TuTacDong_Ref.current[i];
+
+        let bodyCannonRotate;
+        if (useTransformFromHand.current) {
+          if (
+            objects_TuTacDong_Ref.current &&
+            objects_TuTacDong_Ref.current.length
+          ) {
+            for (let i = 0; i < objects_TuTacDong_Ref.current.length; i++) {
               if (
-                type == "position" ||
-                type == "rotation" ||
-                type == "quaternion"
+                objects_TuTacDong_Ref.current[i].mesh &&
+                objects_TuTacDong_Ref.current[i].mesh.uuid == mesh.uuid
               ) {
-                updateTransformToFrom(mesh, body);
-              } else if (type == "scale") {
-                mesh.updateMatrixWorld(true);
-                // 2. Tìm collider cũ (nếu có)
-                const idx = i;
-                if (idx === -1) {
-                  console.warn(
-                    "Không tìm thấy collider tương ứng với mesh:",
-                    mesh.name
+                const { mesh, body } = objects_TuTacDong_Ref.current[i];
+                if (
+                  type == "position" ||
+                  type == "rotation" ||
+                  type == "quaternion"
+                ) {
+                  updateTransformToFrom(mesh, body);
+                } else if (type == "scale") {
+                  mesh.updateMatrixWorld(true);
+                  // 2. Tìm collider cũ (nếu có)
+                  const idx = i;
+                  if (idx === -1) {
+                    console.warn(
+                      "Không tìm thấy collider tương ứng với mesh:",
+                      mesh.name
+                    );
+                    return;
+                  }
+                  const { body: oldBody } = objects_TuTacDong_Ref.current[idx];
+
+                  // 3. Loại bỏ body cũ khỏi world
+                  worldCannonRef.current.removeBody(oldBody);
+
+                  // 1. Lấy bounding box LOCAL của geometry gốc
+                  const bbox =
+                    mesh.geometry.boundingBox ||
+                    mesh.geometry.clone().computeBoundingBox();
+                  const sizeLocal = new THREE.Vector3();
+                  bbox.getSize(sizeLocal);
+                  const centerLocal = new THREE.Vector3();
+                  bbox.getCenter(centerLocal);
+
+                  // 2. Lấy scale của mesh trong thế giới
+                  const scaleWorld = new THREE.Vector3();
+                  mesh.getWorldScale(scaleWorld);
+
+                  // 3. Tính lại size collider theo scale thực
+                  const sizeWorld = sizeLocal.clone().multiply(scaleWorld);
+                  const centerWorld = centerLocal
+                    .clone()
+                    .applyMatrix4(mesh.matrixWorld);
+
+                  // 3. Tạo collider mới
+                  const halfExtents = new CANNON.Vec3(
+                    sizeWorld.x / 2,
+                    sizeWorld.y / 2,
+                    sizeWorld.z / 2
                   );
-                  return;
+                  const shape = new CANNON.Box(halfExtents);
+                  const newBody = new CANNON.Body({ mass: 0, shape });
+
+                  // 4. Đặt collider đúng vị trí & xoay
+                  newBody.position.set(
+                    centerWorld.x,
+                    centerWorld.y,
+                    centerWorld.z
+                  );
+                  const quat = new THREE.Quaternion();
+                  mesh.getWorldQuaternion(quat);
+                  newBody.quaternion.set(quat.x, quat.y, quat.z, quat.w);
+                  newBody.aabbNeedsUpdate = true;
+
+                  // 7. Thêm vào world mới
+                  worldCannonRef.current.addBody(newBody);
+                  objects_TuTacDong_Ref.current[idx].body = newBody;
+                  bodyCannonRotate = newBody
                 }
-                const { body: oldBody } = objects_TuTacDong_Ref.current[idx];
 
-                // 3. Loại bỏ body cũ khỏi world
-                worldCannonRef.current.removeBody(oldBody);
-
-                // 1. Lấy bounding box LOCAL của geometry gốc
-                const bbox =
-                  mesh.geometry.boundingBox ||
-                  mesh.geometry.clone().computeBoundingBox();
-                const sizeLocal = new THREE.Vector3();
-                bbox.getSize(sizeLocal);
-                const centerLocal = new THREE.Vector3();
-                bbox.getCenter(centerLocal);
-
-                // 2. Lấy scale của mesh trong thế giới
-                const scaleWorld = new THREE.Vector3();
-                mesh.getWorldScale(scaleWorld);
-
-                // 3. Tính lại size collider theo scale thực
-                const sizeWorld = sizeLocal.clone().multiply(scaleWorld);
-                const centerWorld = centerLocal
-                  .clone()
-                  .applyMatrix4(mesh.matrixWorld);
-
-                // 3. Tạo collider mới
-                const halfExtents = new CANNON.Vec3(
-                  sizeWorld.x / 2,
-                  sizeWorld.y / 2,
-                  sizeWorld.z / 2
-                );
-                const shape = new CANNON.Box(halfExtents);
-                const newBody = new CANNON.Body({ mass: 0, shape });
-
-                // 4. Đặt collider đúng vị trí & xoay
-                newBody.position.set(
-                  centerWorld.x,
-                  centerWorld.y,
-                  centerWorld.z
-                );
-                const quat = new THREE.Quaternion();
-                mesh.getWorldQuaternion(quat);
-                newBody.quaternion.set(quat.x, quat.y, quat.z, quat.w);
-                newBody.aabbNeedsUpdate = true;
-
-                // 7. Thêm vào world mới
-                worldCannonRef.current.addBody(newBody);
-                objects_TuTacDong_Ref.current[idx].body = newBody;
+                break;
               }
-
-              break;
+            }
+          }
+          if (
+            bodyCannonRotate &&
+            objects_2_RoiTuDo_Auto_Ref.current &&
+            objects_2_RoiTuDo_Auto_Ref.current.length
+          ) {
+            for (let i = 0; i < objects_2_RoiTuDo_Auto_Ref.current.length; i++) {
+              if (
+                objects_2_RoiTuDo_Auto_Ref.current[i].mesh &&
+                objects_2_RoiTuDo_Auto_Ref.current[i].mesh.uuid == mesh.uuid
+              ) {
+                console.log("update objects_2_RoiTuDo_Auto_Ref")
+                objects_2_RoiTuDo_Auto_Ref.current[i].body = bodyCannonRotate
+                break;
+              }
+            }
+          }
+          if (
+            bodyCannonRotate &&
+            dovatsapxep.current &&
+            dovatsapxep.current.length
+          ) {
+            for (let i = 0; i < dovatsapxep.current.length; i++) {
+              if (
+                dovatsapxep.current[i].mesh &&
+                dovatsapxep.current[i].mesh.uuid == mesh.uuid
+              ) {
+                dovatsapxep.current[i].body = bodyCannonRotate
+                break;
+              }
             }
           }
         }
@@ -1771,6 +2026,14 @@ const initFunc = forwardRef((props, ref) => {
         meshT.position.copy(bodyT.position);
         meshT.quaternion.copy(bodyT.quaternion);
       });
+      objects_2_RoiTuDo_Auto_Ref.current.forEach(({ mesh: meshT, body: bodyT }) => {
+        if (useTransformFromHand && useTransformFromHand.current && selectedObjectRef && selectedObjectRef.current && selectedObjectRef.current.uuid == meshT.uuid) {
+        } else {
+          meshT.position.copy(bodyT.position);
+          meshT.quaternion.copy(bodyT.quaternion);
+        }
+      });
+
       // objects_TuTacDong_Ref.current.forEach(({ mesh, body }) => {
       //   const { position, quaternion, scale } = getGlobalTransform(mesh);
       //   // body.position.copy(mesh.position);
@@ -1781,15 +2044,15 @@ const initFunc = forwardRef((props, ref) => {
       //   body.aabbNeedsUpdate = true;
       // });
 
-      if (arrHelperUpdate.current && arrHelperUpdate.current.length) {
-        arrHelperUpdate.current.forEach(({ helper, target }) => {
-          //     // helper.position.copy(target.getWorldPosition(new THREE.Vector3()));
-          //     // helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
-          //     target.updateMatrixWorld(true);
-          //     helper.position.copy(target.getWorldPosition(new THREE.Vector3()));
-          //     helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
-        });
-      }
+      // if (arrHelperUpdate.current && arrHelperUpdate.current.length) {
+      //   arrHelperUpdate.current.forEach(({ helper, target }) => {
+      //     //     // helper.position.copy(target.getWorldPosition(new THREE.Vector3()));
+      //     //     // helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
+      //     //     target.updateMatrixWorld(true);
+      //     //     helper.position.copy(target.getWorldPosition(new THREE.Vector3()));
+      //     //     helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
+      //   });
+      // }
 
       // arrHelperUpdate.current.forEach(({ helper, target }) => {
       //   target.updateMatrixWorld(true);
@@ -1807,7 +2070,7 @@ const initFunc = forwardRef((props, ref) => {
       //   helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
       //   // helper.scale.copy(target.getWorldScale(new THREE.Vector3()));
       // });
-      // cannonDebugger.update();
+      cannonDebugger.update();
       if (
         arrBox3HelperAutoUpdate &&
         arrBox3HelperAutoUpdate.current &&
@@ -1962,7 +2225,16 @@ const initFunc = forwardRef((props, ref) => {
             };
           }
         }
-
+        let objects_2_RoiTuDo_Auto_Ref_obj = {};
+        for (let i = 0; i < objects_2_RoiTuDo_Auto_Ref.current.length; i++) {
+          if (objects_2_RoiTuDo_Auto_Ref.current[i].mesh.isMesh) {
+            objects_2_RoiTuDo_Auto_Ref_obj[
+              objects_2_RoiTuDo_Auto_Ref.current[i].mesh.uuid
+            ] = {
+              idx: i,
+            };
+          }
+        }
         const arrayObjectSelectedT = [...arrayObjectSelected];
         if (arrayObjectSelectedT && arrayObjectSelectedT.length) {
           for (let k = 0; k < arrayObjectSelectedT.length; k++) {
@@ -1984,6 +2256,12 @@ const initFunc = forwardRef((props, ref) => {
                 objects_TuTacDong_Ref.current[
                   objects_TuTacDong_Ref_obj[arrayObjectSelectedT[k].uuid].idx
                 ].body = bodyCannon;
+                if (type == 'scale') {
+                  console.log("vao scale group do",)
+                }
+                // if (objects_2_RoiTuDo_Auto_Ref_obj[arrayObjectSelectedT[k].uuid]) {
+                //   objects_2_RoiTuDo_Auto_Ref.current[objects_2_RoiTuDo_Auto_Ref_obj[arrayObjectSelectedT[k].uuid].idx].body = bodyCannon;
+                // }
               }
             }
           }
@@ -3308,7 +3586,7 @@ const initFunc = forwardRef((props, ref) => {
           floorHouse.material.needsUpdate = true;
         }
       };
-      scene.add(floorHouse);
+      // scene.add(floorHouse);
       floorRef.current = floorHouse;
     }
 
@@ -3960,9 +4238,28 @@ const initFunc = forwardRef((props, ref) => {
                     );
                     const boxShape = new CANNON.Box(halfExtents);
 
+
+
+
+                    const floorMaterial = new CANNON.Material('floorMaterial');
+                    // Material cho vật
+                    const boxMaterial = new CANNON.Material('boxMaterial');
+                    const contactMaterial = new CANNON.ContactMaterial(
+                      floorMaterial,
+                      boxMaterial,
+                      {
+                        friction: 1,       // ma sát: 0 (trơn) → 1 (rất nhám)
+                        restitution: 0.0,    // độ nảy: 0 (không nảy), 1 (nảy hết lực)
+                      }
+                    );
+
+
                     const boxBody = new CANNON.Body({
-                      mass: 0, // static body
+                      mass: 10000, // static body
                       shape: boxShape,
+                      material: contactMaterial,
+                      linearDamping: 0.99,   // Giảm trôi
+                      angularDamping: 0.99 // Giảm lắc khi va chạm
                     });
 
                     // Set vị trí và quaternion theo objTT (đã là world space)
@@ -3987,17 +4284,23 @@ const initFunc = forwardRef((props, ref) => {
                     worldCannonRef.current.addBody(boxBody);
 
                     // --- Lưu lại để đồng bộ nếu cần ---
+                    objects_2_RoiTuDo_Auto_Ref.current.push({
+                      mesh: objTT,
+                      body: boxBody,
+                    });
                     objects_TuTacDong_Ref.current.push({
                       mesh: objTT,
                       body: boxBody,
                     });
                     scene.attach(objTT);
                     objTT.onTransformChange = (type, axis, newVal) => {
+
                       if (
                         useTransformFromHand.current &&
                         objects_TuTacDong_Ref.current &&
                         objects_TuTacDong_Ref.current.length
                       ) {
+                        console.log("meshhhhhh onTransformChange")
                         for (
                           let i = 0;
                           i < objects_TuTacDong_Ref.current.length;
@@ -4058,8 +4361,11 @@ const initFunc = forwardRef((props, ref) => {
                               );
                               const shape = new CANNON.Box(halfExtents);
                               const newBody = new CANNON.Body({
-                                mass: 0,
-                                shape,
+                                mass: 10000, // static body
+                                shape: shape,
+                                material: contactMaterial,
+                                linearDamping: 0.99,   // Giảm trôi
+                                angularDamping: 0.99 // Giảm lắc khi va chạm
                               });
 
                               // 4. Đặt collider đúng vị trí & xoay
@@ -4081,6 +4387,14 @@ const initFunc = forwardRef((props, ref) => {
                               // 7. Thêm vào world mới
                               worldCannonRef.current.addBody(newBody);
                               objects_TuTacDong_Ref.current[idx].body = newBody;
+                              if (objects_2_RoiTuDo_Auto_Ref.current && objects_2_RoiTuDo_Auto_Ref.current.length) {
+                                for (let m = 0; m < objects_2_RoiTuDo_Auto_Ref.current.length; m++) {
+                                  if (objects_2_RoiTuDo_Auto_Ref.current[m].mesh && objects_2_RoiTuDo_Auto_Ref.current[m].mesh.uuid == objTT.uuid) {
+                                    objects_2_RoiTuDo_Auto_Ref.current[m].body = newBody
+                                    break
+                                  }
+                                }
+                              }
                             }
                             break;
                           }
@@ -4588,6 +4902,7 @@ const initFunc = forwardRef((props, ref) => {
   function randomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
   }
+  const objects_2_RoiTuDo_Auto_Ref = useRef([]);
   const objects_RoiTuDo_Ref = useRef([]);
   const objects_TuTacDong_Ref = useRef([]);
   const dropRandomObjectInterValRef = useRef(null);
@@ -4662,8 +4977,190 @@ const initFunc = forwardRef((props, ref) => {
     }, 500);
   };
   function dichuyengaunhien() {
+    startRandomBoxMovementIntervalCheck.current =
+      !startRandomBoxMovementIntervalCheck.current;
+    if (!startRandomBoxMovementIntervalCheck.current) {
+      if (startRandomBoxMovementIntervalRef.current) {
+        clearInterval(startRandomBoxMovementIntervalRef.current);
+      }
+      return;
+    }
     const boxes = dovatdichuyen.current;
     startRandomBoxMovement(boxes, 400);
+  }
+
+  // function arrangeObjectsWithVoxelOptimized({
+  //   gridSize,
+  //   objects,
+  //   scene,
+  //   world,
+  //   cellSize = 1,
+  //   spacing = 0.2,
+  //   dropHeight = 5,
+  //   maxOffset = 50,
+  // }) {
+  //   const [m, n] = gridSize;
+  //   const centerX = Math.floor(m / 2);
+  //   const centerZ = Math.floor(n / 2);
+
+  //   const occupiedBoxes = [];
+
+  //   for (const { mesh, body } of objects) {
+  //     const bbox = new THREE.Box3().setFromObject(mesh);
+  //     const size = new THREE.Vector3();
+  //     bbox.getSize(size);
+
+  //     const sizeX = Math.ceil((size.x + spacing) / cellSize);
+  //     const sizeZ = Math.ceil((size.z + spacing) / cellSize);
+  //     const halfSize = size.clone().multiplyScalar(0.5);
+
+  //     let placed = false;
+
+  //     for (let offset = 0; offset <= maxOffset && !placed; offset++) {
+  //       for (let dx = -offset; dx <= offset && !placed; dx += sizeX) {
+  //         for (let dz = -offset; dz <= offset && !placed; dz += sizeZ) {
+  //           const i = centerX + dx;
+  //           const j = centerZ + dz;
+
+  //           if (i < 0 || j < 0 || i + sizeX > m || j + sizeZ > n) continue;
+
+  //           const x = i * cellSize;
+  //           const z = j * cellSize;
+  //           const y = halfSize.y + dropHeight;
+
+  //           const min = new THREE.Vector3(x, y, z).sub(halfSize);
+  //           const max = new THREE.Vector3(x, y, z).add(halfSize);
+
+  //           const collision = occupiedBoxes.some(box => (
+  //             min.x <= box.max.x && max.x >= box.min.x &&
+  //             min.y <= box.max.y && max.y >= box.min.y &&
+  //             min.z <= box.max.z && max.z >= box.min.z
+  //           ));
+
+  //           if (!collision) {
+  //             mesh.position.set(x, y, z);
+  //             if (body) {
+  //               body.position.set(x, y, z);
+  //               body.velocity.set(0, 0, 0);
+  //               body.angularVelocity.set(0, 0, 0);
+  //               if (!world.bodies.includes(body)) world.addBody(body);
+  //             }
+
+  //             if (!scene.children.includes(mesh)) scene.add(mesh);
+
+  //             occupiedBoxes.push({ min, max });
+  //             placed = true;
+
+  //             console.log(`✅ Đặt vật tại (${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`);
+  //           }
+  //         }
+  //       }
+  //     }
+
+  //     if (!placed) {
+  //       console.warn("❌ Không thể đặt vật:", mesh.name || mesh.uuid);
+  //     }
+  //   }
+  // }
+
+  function arrangeObjectsByBoundingBox({
+    gridSize,  // [m, n]
+    objects,   // [{ mesh, body }]
+    scene,
+    world,
+    cellSize = 1,
+    spacing = 0.05,  // khoảng cách giữa vật
+  }) {
+    const [m, n] = gridSize;
+    const centerX = Math.floor(m / 2);
+    const centerZ = Math.floor(n / 2);
+
+    // Lưu vùng đã bị chiếm trên mặt OXZ, dạng array 2D đánh dấu ô đã có vật
+    const occupiedGrid = Array(m)
+      .fill(null)
+      .map(() => Array(n).fill(false));
+
+    // Hàm kiểm tra vùng lưới [x, x+sizeX), [z, z+sizeZ) đã có vật chưa
+    function isOccupied(x, z, sizeX, sizeZ) {
+      if (x < 0 || z < 0 || x + sizeX > m || z + sizeZ > n) return true;
+      for (let i = x; i < x + sizeX; i++) {
+        for (let j = z; j < z + sizeZ; j++) {
+          if (occupiedGrid[i][j]) return true;
+        }
+      }
+      return false;
+    }
+
+    // Đánh dấu vùng đã bị chiếm
+    function markOccupied(x, z, sizeX, sizeZ) {
+      for (let i = x; i < x + sizeX; i++) {
+        for (let j = z; j < z + sizeZ; j++) {
+          occupiedGrid[i][j] = true;
+        }
+      }
+    }
+
+    for (const { mesh, body } of objects) {
+      if (body._placed) continue;
+
+      const bbox = new THREE.Box3().setFromObject(mesh);
+      const size = new THREE.Vector3();
+      bbox.getSize(size);
+
+      // Tính số ô chiếm trong lưới theo kích thước bounding box
+      const sizeX = Math.max(1, Math.ceil((size.x + spacing) / cellSize));
+      const sizeZ = Math.max(1, Math.ceil((size.z + spacing) / cellSize));
+
+      let placed = false;
+
+      // Duyệt vị trí trên lưới, bắt đầu từ tâm, đi ra ngoài
+      const maxOffset = Math.max(m, n);
+      for (let offset = 0; offset <= maxOffset && !placed; offset++) {
+        for (let dx = -offset; dx <= offset && !placed; dx++) {
+          for (let dz = -offset; dz <= offset && !placed; dz++) {
+            const i = centerX + dx;
+            const j = centerZ + dz;
+
+            if (isOccupied(i, j, sizeX, sizeZ)) continue;
+
+            // Tính vị trí đặt vật (trung tâm bounding box)
+            const x = i * cellSize + (size.x / 2);
+            const z = j * cellSize + (size.z / 2);
+            const y = size.y / 2; // đặt vật trên mặt đất
+
+            mesh.position.set(x, y, z);
+            body.position.set(x, y, z);
+            body.velocity.set(0, 0, 0);
+            body.angularVelocity.set(0, 0, 0);
+
+            if (!scene.children.includes(mesh)) scene.add(mesh);
+            if (!body.world) world.addBody(body);
+
+            markOccupied(i, j, sizeX, sizeZ);
+            body._placed = true;
+            placed = true;
+
+            console.log(`✅ Đặt vật tại: (${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`);
+          }
+        }
+      }
+
+      if (!placed) {
+        console.warn('❌ Không thể đặt vật:', mesh.name || mesh.uuid);
+      }
+    }
+  }
+
+
+
+
+  function sapxepdovatngaunhien() {
+    const gridSize = [200, 200]
+    const objects = dovatsapxep.current;
+    const spacing = 5
+    const floorY = 2
+    arrangeObjectsByBoundingBox({ gridSize, objects, world: worldCannonRef.current, scene: sceneRef.current })
+    console.log("sortingManager=", sortingManager)
   }
   return (
     <>
@@ -5014,6 +5511,7 @@ const initFunc = forwardRef((props, ref) => {
           </div>
           <Button onClick={dropRandomObject}>Thả ngẫu nhiên vật</Button>
           <Button onClick={dichuyengaunhien}>Di chuyen ngau nhien</Button>
+          <Button onClick={sapxepdovatngaunhien}>Sắp xếp đồ vật ngẫu nhiên</Button>
         </div>
         <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
       </div>
