@@ -588,13 +588,15 @@ const initFunc = forwardRef((props, ref) => {
   const arrBox3HelperAutoUpdate = useRef([]);
   const modelThreeCommon = useSelector((state) => state.modelThreejs.models);
   const modelThreeCommonRef = useRef({});
-  useEffect(() => {}, [modelThreeCommon]);
+  useEffect(() => { }, [modelThreeCommon]);
   const arrHelperUpdate = useRef([]);
   const clockCannonRef = useRef();
   const worldCannonRef = useRef();
   const { dataDeepFloorplan, wallHeight, modelName, mergeWallsT } = props;
   const [splitGroup, setsplitGroup] = useState(false);
   const containerRef = useRef(null);
+  const containerViewRef = useRef(null);
+  const miniViewRef = useRef(null);
   const [mousePos3D, setMousePos3D] = useState(new THREE.Vector3());
   const [gridSize, setGridSize] = useState([400, 400]);
   const [useGroup, setUseGroup] = useState(true);
@@ -629,6 +631,8 @@ const initFunc = forwardRef((props, ref) => {
   const cameraRef = useRef();
   const controlsRef = useRef();
   const rendererRef = useRef();
+  const rendererViewRef = useRef();
+  const rendererMiniViewRef = useRef();
   const floorRef = useRef();
   const gridSenceRef = useRef();
   const cameraSphereRef = useRef();
@@ -1065,7 +1069,7 @@ const initFunc = forwardRef((props, ref) => {
           const newBody = createColliderFromMesh(objTT);
           if (worldCannonRef && worldCannonRef.current) {
             worldCannonRef.current.addBody(newBody);
-             objects_2_RoiTuDo_Auto_Ref.current[objTT.uuid] = {
+            objects_2_RoiTuDo_Auto_Ref.current[objTT.uuid] = {
               mesh: objTT,
               body: newBody,
             };
@@ -1075,7 +1079,7 @@ const initFunc = forwardRef((props, ref) => {
             };
           }
         } catch { }
-        console.log("objTT",objTT)
+        console.log("objTT", objTT)
       });
 
       // 7. Cleanup group metadata
@@ -1096,7 +1100,7 @@ const initFunc = forwardRef((props, ref) => {
                 objects_2_RoiTuDo_Auto_Ref.current[groups.uuid].body
               );
             }
-          } catch {}
+          } catch { }
           delete objects_2_RoiTuDo_Auto_Ref.current[groups.uuid];
         }
         if (
@@ -1109,10 +1113,10 @@ const initFunc = forwardRef((props, ref) => {
                 objects_TuTacDong_Ref.current[groups.uuid].body
               );
             }
-          } catch {}
+          } catch { }
           delete objects_TuTacDong_Ref.current[groups.uuid];
         }
-      } catch {}
+      } catch { }
     }
   }, [splitGroup]);
 
@@ -1141,7 +1145,7 @@ const initFunc = forwardRef((props, ref) => {
       return () => {
         try {
           containerRef.current.removeEventListener("mousemove", onMouseMove);
-        } catch {}
+        } catch { }
       };
     }, [containerRef, camera, onUpdatePosition]);
   }
@@ -1157,9 +1161,9 @@ const initFunc = forwardRef((props, ref) => {
     try {
       modelDoor =
         modelThreeCommonRefT["door-window"][
-          Object.keys(modelThreeCommonRefT["door-window"])[0]
+        Object.keys(modelThreeCommonRefT["door-window"])[0]
         ];
-    } catch {}
+    } catch { }
     // door-window
     if (positionDoorWindow && positionDoorWindow.length) {
       for (let i = 0; i < positionDoorWindow.length; i++) {
@@ -1225,7 +1229,14 @@ const initFunc = forwardRef((props, ref) => {
     if (cameraSphereRef && cameraSphereRef.current) {
       cameraSphereRef.current.position.set(...cameraPosition);
     }
-
+    // const oldPosition = _.cloneDeep(cameraRef.current.position)
+    const oldQuaternion = _.cloneDeep(cameraRef.current.quaternion)
+    cameraRef.current.position.x = cameraPosition[0]
+    cameraRef.current.position.y = cameraPosition[1]
+    cameraRef.current.position.z = cameraPosition[2]
+    cameraRef.current.quaternion.copy(oldQuaternion)
+    cameraRef.current.updateMatrixWorld();
+    // cameraRef.current.position.set(cameraPosition[0], 0, cameraPosition[2])
     const controls = controlsRef.current;
     controls.target.set(cameraPosition[0], 0, cameraPosition[2]); // thường là tâm lưới
     controls.update();
@@ -1308,13 +1319,28 @@ const initFunc = forwardRef((props, ref) => {
 
     return body;
   }
+  function syncCamera(main, copy) {
+    copy.position.copy(main.position);         // Gán vị trí
+    copy.quaternion.copy(main.quaternion);     // Gán hướng nhìn (rotation)
+    copy.updateMatrixWorld();                  // Cập nhật ma trận
+  }
   useEffect(() => {
     loadModelCommons();
     try {
       const renderer = rendererRef.current;
       if (renderer && renderer.domElement)
         containerRef.current.removeChild(renderer.domElement);
-    } catch {}
+    } catch { }
+    try {
+      const rendererView = rendererViewRef.current;
+      if (rendererView && rendererView.domElement)
+        containerViewRef.current.removeChild(rendererView.domElement);
+    } catch { }
+    try {
+      const rendererMiniView = rendererMiniViewRef.current;
+      if (rendererMiniView && rendererMiniView.domElement)
+        miniViewRef.current.removeChild(rendererMiniView.domElement);
+    } catch { }
     const sceneWidth = containerRef.current.clientWidth;
     const sceneHeight = containerRef.current.clientHeight;
 
@@ -1348,12 +1374,105 @@ const initFunc = forwardRef((props, ref) => {
       0.1,
       2000
     );
-
+    camera.layers.enable(1);
     camera.position.set(gridSize[0], gridSize[0], gridSize[1]);
     // camera.position.set(cameraPosition)
-
     camera.lookAt(gridSize[0] / 2, 0, gridSize[1] / 2);
     cameraRef.current = camera;
+    console.log("camera", camera)
+
+    const cameraMini = camera.clone()
+    cameraMini.near = 0.1;
+    cameraMini.far = 200;
+    cameraMini.fov = 30;
+    cameraMini.aspect = sceneWidth / sceneHeight;
+    const rendererMiniViewRefCanvas = new THREE.WebGLRenderer({
+      antialias: true,
+      preserveDrawingBuffer: true
+    });
+    rendererMiniViewRefCanvas.setSize(250, 250);
+    rendererMiniViewRefCanvas.setClearColor(0x222222);
+    miniViewRef.current.appendChild(rendererMiniViewRefCanvas.domElement);
+    rendererMiniViewRef.current = rendererMiniViewRefCanvas;
+
+    const cameraCanvas = camera.clone()
+    cameraCanvas.near = 0.1;
+    cameraCanvas.far = 100;
+    cameraCanvas.fov = 30;
+    cameraCanvas.aspect = sceneWidth / sceneHeight;
+    // // // Bắt buộc phải gọi updateProjectionMatrix sau khi thay đổi thông số
+    // // // cameraCanvas.updateProjectionMatrix();
+    // const cameraCanvas = new THREE.PerspectiveCamera(
+    //   30,
+    //   sceneWidth / sceneHeight,
+    //   0.1,
+    //   100
+    // );
+    // cameraCanvas.position.set(gridSize[0], gridSize[0], gridSize[1]);
+    // cameraCanvas.lookAt(gridSize[0] / 2, 0, gridSize[1] / 2);
+
+    // 2. Helper hình chóp
+    const helperCameraHelper = new THREE.CameraHelper(cameraCanvas);
+    helperCameraHelper.traverse(obj => {
+      obj.layers.set(2);
+    });
+    scene.add(helperCameraHelper);
+
+    // 3. Camera phụ (nhìn từ xa nhưng nghiêng xuống)
+    const cameraDebug = new THREE.OrthographicCamera(
+      -500, 500, 500, -500, 0.1, 5000
+    );
+    cameraDebug.position.set(800, 800, 800); // Nghiêng góc nhìn để thấy hình chóp
+    cameraDebug.lookAt(gridSize[0] / 2, 0, gridSize[1] / 2);
+    cameraDebug.layers.enable(2);
+    const debugRenderer = new THREE.WebGLRenderer({
+      antialias: true,
+      preserveDrawingBuffer: true
+    });
+    debugRenderer.setSize(250, 250);
+    debugRenderer.setClearColor(0x222222);
+    containerViewRef.current.appendChild(debugRenderer.domElement);
+    rendererViewRef.current = debugRenderer;
+
+    const center = new THREE.Vector3(gridSize[0] / 2, 0, gridSize[1] / 2);
+    const XAxisArrowHelper = new THREE.ArrowHelper(
+      new THREE.Vector3(1, 0, 0),  // Hướng X
+      center.clone(),              // Gốc tại giữa lưới
+      500,                         // Chiều dài
+      0xff0000,                    // Màu đỏ
+      100,                         // Mũi tên
+      50
+    )
+    XAxisArrowHelper.layers.set(2)
+    XAxisArrowHelper.traverse(obj => {
+      obj.layers.set(2);
+    });
+    const YAxisArrowHelper = new THREE.ArrowHelper(
+      new THREE.Vector3(0, 1, 0),  // Hướng Y
+      center.clone(),
+      500,
+      0x00ff00,
+      100,
+      50
+    )
+    YAxisArrowHelper.layers.set(2)
+    YAxisArrowHelper.traverse(obj => {
+      obj.layers.set(2);
+    });
+    const ZAxisArrowHelper = new THREE.ArrowHelper(
+      new THREE.Vector3(0, 0, 1),  // Hướng Z
+      center.clone(),
+      500,
+      0x0000ff,
+      100,
+      50
+    )
+    ZAxisArrowHelper.layers.set(2)
+    ZAxisArrowHelper.traverse(obj => {
+      obj.layers.set(2);
+    });
+    scene.add(XAxisArrowHelper, YAxisArrowHelper, ZAxisArrowHelper);
+
     // tạo 1 khối cầu tượng trưng cho camera
     // Tạo vật thể sphere màu đỏ ở vị trí cameraPosition
     const geometry = new THREE.SphereGeometry(5, 32, 32); // bán kính 0.5
@@ -1367,7 +1486,10 @@ const initFunc = forwardRef((props, ref) => {
     scene.add(cameraSphere);
 
     // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      preserveDrawingBuffer: true
+    });
     renderer.setSize(sceneWidth, sceneHeight);
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -1386,165 +1508,165 @@ const initFunc = forwardRef((props, ref) => {
     controlsRef.current = controls;
 
     // // Tạo mesh ví dụ
-    let createBox = [];
-    const boxGeo = new THREE.BoxGeometry(5, 5, 5);
-    for (let i = 0; i < 20; i++) {
-      const boxMat = new THREE.MeshStandardMaterial({ color: 0x0088ff });
-      // const mesh = new THREE.Mesh(boxGeo, boxMat)
-      const mesh = new CustomMesh(boxGeo, boxMat);
-      mesh.position.set(
-        Math.random() * 200 - 25 + gridSize[0] / 2,
-        // Math.random() * 50 + 25,
-        0,
-        Math.random() * 200 - 25 + gridSize[1] / 2
-      );
-      mesh.userData.selectable = true;
-      mesh.userData.SelectionBox = true;
-      mesh.isSelectionBox = true;
-      dovatdichuyen.current.push(mesh);
-      scene.add(mesh);
-      createBox.push(mesh);
+    // let createBox = [];
+    // const boxGeo = new THREE.BoxGeometry(5, 5, 5);
+    // for (let i = 0; i < 20; i++) {
+    //   const boxMat = new THREE.MeshStandardMaterial({ color: 0x0088ff });
+    //   // const mesh = new THREE.Mesh(boxGeo, boxMat)
+    //   const mesh = new CustomMesh(boxGeo, boxMat);
+    //   mesh.position.set(
+    //     Math.random() * 200 - 25 + gridSize[0] / 2,
+    //     // Math.random() * 50 + 25,
+    //     0,
+    //     Math.random() * 200 - 25 + gridSize[1] / 2
+    //   );
+    //   mesh.userData.selectable = true;
+    //   mesh.userData.SelectionBox = true;
+    //   mesh.isSelectionBox = true;
+    //   dovatdichuyen.current.push(mesh);
+    //   scene.add(mesh);
+    //   createBox.push(mesh);
 
-      // 2. Lấy kích thước box từ geometry (để tạo Collider)
-      boxGeo.computeBoundingBox();
-      const size = new THREE.Vector3();
-      boxGeo.boundingBox.getSize(size);
+    //   // 2. Lấy kích thước box từ geometry (để tạo Collider)
+    //   boxGeo.computeBoundingBox();
+    //   const size = new THREE.Vector3();
+    //   boxGeo.boundingBox.getSize(size);
 
-      // 3. Tạo shape và body Cannon.js
-      const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
-      const boxShape = new CANNON.Box(halfExtents);
-      // Material cho nền
-      const floorMaterial = new CANNON.Material("floorMaterial");
-      // Material cho vật
-      const boxMaterial = new CANNON.Material("boxMaterial");
-      const contactMaterial = new CANNON.ContactMaterial(
-        floorMaterial,
-        boxMaterial,
-        {
-          friction: 1, // ma sát: 0 (trơn) → 1 (rất nhám)
-          restitution: 0.0, // độ nảy: 0 (không nảy), 1 (nảy hết lực)
-        }
-      );
-      // mass được coi như là trọng lượng của vật để chịu lực g xét từ trước
-      const boxBody = new CANNON.Body({
-        mass: 1000, // đổi thành 0 nếu muốn đứng yên =>0 thì ko chịu tác động của lực, 1 thì chịu tác động của lực theo cách set có dùng lực hay ko
-        // type: CANNON.Body.KINEMATIC,
-        // type: CANNON.Body.STATIC,
-        shape: boxShape,
-        // material: new CANNON.Material('noBounce'),
-        material: contactMaterial,
-        linearDamping: 0.99, // Giảm trôi
-        angularDamping: 0.99, // Giảm lắc khi va chạm
-      });
+    //   // 3. Tạo shape và body Cannon.js
+    //   const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
+    //   const boxShape = new CANNON.Box(halfExtents);
+    //   // Material cho nền
+    //   const floorMaterial = new CANNON.Material("floorMaterial");
+    //   // Material cho vật
+    //   const boxMaterial = new CANNON.Material("boxMaterial");
+    //   const contactMaterial = new CANNON.ContactMaterial(
+    //     floorMaterial,
+    //     boxMaterial,
+    //     {
+    //       friction: 1, // ma sát: 0 (trơn) → 1 (rất nhám)
+    //       restitution: 0.0, // độ nảy: 0 (không nảy), 1 (nảy hết lực)
+    //     }
+    //   );
+    //   // mass được coi như là trọng lượng của vật để chịu lực g xét từ trước
+    //   const boxBody = new CANNON.Body({
+    //     mass: 1000, // đổi thành 0 nếu muốn đứng yên =>0 thì ko chịu tác động của lực, 1 thì chịu tác động của lực theo cách set có dùng lực hay ko
+    //     // type: CANNON.Body.KINEMATIC,
+    //     // type: CANNON.Body.STATIC,
+    //     shape: boxShape,
+    //     // material: new CANNON.Material('noBounce'),
+    //     material: contactMaterial,
+    //     linearDamping: 0.99, // Giảm trôi
+    //     angularDamping: 0.99, // Giảm lắc khi va chạm
+    //   });
 
-      // 4. Đặt vị trí vật lý giống mesh
-      boxBody.position.set(mesh.position.x, mesh.position.y, mesh.position.z);
+    //   // 4. Đặt vị trí vật lý giống mesh
+    //   boxBody.position.set(mesh.position.x, mesh.position.y, mesh.position.z);
 
-      // 5. Thêm body vào thế giới vật lý
-      worldCannonRef.current.addBody(boxBody);
-      objects_TuTacDong_Ref.current[mesh.uuid] = {
-        mesh: mesh,
-        body: boxBody,
-      };
-      objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid] = {
-        mesh: mesh,
-        body: boxBody,
-      };
-      dovatsapxep.current[mesh.uuid] = {
-        mesh: mesh,
-        body: boxBody,
-      };
+    //   // 5. Thêm body vào thế giới vật lý
+    //   worldCannonRef.current.addBody(boxBody);
+    //   objects_TuTacDong_Ref.current[mesh.uuid] = {
+    //     mesh: mesh,
+    //     body: boxBody,
+    //   };
+    //   objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid] = {
+    //     mesh: mesh,
+    //     body: boxBody,
+    //   };
+    //   dovatsapxep.current[mesh.uuid] = {
+    //     mesh: mesh,
+    //     body: boxBody,
+    //   };
 
-      mesh.onTransformChange = (type, axis, newVal) => {
-        let bodyCannonRotate;
-        if (useTransformFromHand.current) {
-          if (
-            objects_TuTacDong_Ref.current &&
-            objects_TuTacDong_Ref.current[mesh.uuid]
-          ) {
-            if (
-              type == "position" ||
-              type == "rotation" ||
-              type == "quaternion"
-            ) {
-              updateTransformToFrom(
-                mesh,
-                objects_TuTacDong_Ref.current[mesh.uuid].body
-              );
-            } else if (type == "scale") {
-              mesh.updateMatrixWorld(true);
-              // 2. Tìm collider cũ (nếu có)
-              // 3. Loại bỏ body cũ khỏi world
-              worldCannonRef.current.removeBody(
-                objects_TuTacDong_Ref.current[mesh.uuid].body
-              );
+    //   mesh.onTransformChange = (type, axis, newVal) => {
+    //     let bodyCannonRotate;
+    //     if (useTransformFromHand.current) {
+    //       if (
+    //         objects_TuTacDong_Ref.current &&
+    //         objects_TuTacDong_Ref.current[mesh.uuid]
+    //       ) {
+    //         if (
+    //           type == "position" ||
+    //           type == "rotation" ||
+    //           type == "quaternion"
+    //         ) {
+    //           updateTransformToFrom(
+    //             mesh,
+    //             objects_TuTacDong_Ref.current[mesh.uuid].body
+    //           );
+    //         } else if (type == "scale") {
+    //           mesh.updateMatrixWorld(true);
+    //           // 2. Tìm collider cũ (nếu có)
+    //           // 3. Loại bỏ body cũ khỏi world
+    //           worldCannonRef.current.removeBody(
+    //             objects_TuTacDong_Ref.current[mesh.uuid].body
+    //           );
 
-              // 1. Lấy bounding box LOCAL của geometry gốc
-              const bbox =
-                mesh.geometry.boundingBox ||
-                mesh.geometry.clone().computeBoundingBox();
-              const sizeLocal = new THREE.Vector3();
-              bbox.getSize(sizeLocal);
-              const centerLocal = new THREE.Vector3();
-              bbox.getCenter(centerLocal);
+    //           // 1. Lấy bounding box LOCAL của geometry gốc
+    //           const bbox =
+    //             mesh.geometry.boundingBox ||
+    //             mesh.geometry.clone().computeBoundingBox();
+    //           const sizeLocal = new THREE.Vector3();
+    //           bbox.getSize(sizeLocal);
+    //           const centerLocal = new THREE.Vector3();
+    //           bbox.getCenter(centerLocal);
 
-              // 2. Lấy scale của mesh trong thế giới
-              const scaleWorld = new THREE.Vector3();
-              mesh.getWorldScale(scaleWorld);
+    //           // 2. Lấy scale của mesh trong thế giới
+    //           const scaleWorld = new THREE.Vector3();
+    //           mesh.getWorldScale(scaleWorld);
 
-              // 3. Tính lại size collider theo scale thực
-              const sizeWorld = sizeLocal.clone().multiply(scaleWorld);
-              const centerWorld = centerLocal
-                .clone()
-                .applyMatrix4(mesh.matrixWorld);
+    //           // 3. Tính lại size collider theo scale thực
+    //           const sizeWorld = sizeLocal.clone().multiply(scaleWorld);
+    //           const centerWorld = centerLocal
+    //             .clone()
+    //             .applyMatrix4(mesh.matrixWorld);
 
-              // 3. Tạo collider mới
-              const halfExtents = new CANNON.Vec3(
-                sizeWorld.x / 2,
-                sizeWorld.y / 2,
-                sizeWorld.z / 2
-              );
-              const shape = new CANNON.Box(halfExtents);
-              const newBody = new CANNON.Body({
-                mass: 1000, // đổi thành 0 nếu muốn đứng yên =>0 thì ko chịu tác động của lực, 1 thì chịu tác động của lực theo cách set có dùng lực hay ko
-                shape: shape,
-                material: contactMaterial,
-                linearDamping: 0.99, // Giảm trôi
-                angularDamping: 0.99, // Giảm lắc khi va chạm
-              });
+    //           // 3. Tạo collider mới
+    //           const halfExtents = new CANNON.Vec3(
+    //             sizeWorld.x / 2,
+    //             sizeWorld.y / 2,
+    //             sizeWorld.z / 2
+    //           );
+    //           const shape = new CANNON.Box(halfExtents);
+    //           const newBody = new CANNON.Body({
+    //             mass: 1000, // đổi thành 0 nếu muốn đứng yên =>0 thì ko chịu tác động của lực, 1 thì chịu tác động của lực theo cách set có dùng lực hay ko
+    //             shape: shape,
+    //             material: contactMaterial,
+    //             linearDamping: 0.99, // Giảm trôi
+    //             angularDamping: 0.99, // Giảm lắc khi va chạm
+    //           });
 
-              // 4. Đặt collider đúng vị trí & xoay
-              newBody.position.set(centerWorld.x, centerWorld.y, centerWorld.z);
-              const quat = new THREE.Quaternion();
-              mesh.getWorldQuaternion(quat);
-              newBody.quaternion.set(quat.x, quat.y, quat.z, quat.w);
-              newBody.aabbNeedsUpdate = true;
+    //           // 4. Đặt collider đúng vị trí & xoay
+    //           newBody.position.set(centerWorld.x, centerWorld.y, centerWorld.z);
+    //           const quat = new THREE.Quaternion();
+    //           mesh.getWorldQuaternion(quat);
+    //           newBody.quaternion.set(quat.x, quat.y, quat.z, quat.w);
+    //           newBody.aabbNeedsUpdate = true;
 
-              // 7. Thêm vào world mới
-              worldCannonRef.current.addBody(newBody);
-              objects_TuTacDong_Ref.current[mesh.uuid].body = newBody;
-              bodyCannonRotate = newBody;
-            }
-          }
-          if (
-            bodyCannonRotate &&
-            objects_2_RoiTuDo_Auto_Ref.current &&
-            objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid]
-          ) {
-            objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid].body =
-              bodyCannonRotate;
-          }
-          if (
-            bodyCannonRotate &&
-            dovatsapxep.current &&
-            dovatsapxep.current[mesh.uuid]
-          ) {
-            dovatsapxep.current[mesh.uuid].body = bodyCannonRotate;
-          }
-        }
-      };
-      // interactableMeshes.current.push(mest);
-    }
+    //           // 7. Thêm vào world mới
+    //           worldCannonRef.current.addBody(newBody);
+    //           objects_TuTacDong_Ref.current[mesh.uuid].body = newBody;
+    //           bodyCannonRotate = newBody;
+    //         }
+    //       }
+    //       if (
+    //         bodyCannonRotate &&
+    //         objects_2_RoiTuDo_Auto_Ref.current &&
+    //         objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid]
+    //       ) {
+    //         objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid].body =
+    //           bodyCannonRotate;
+    //       }
+    //       if (
+    //         bodyCannonRotate &&
+    //         dovatsapxep.current &&
+    //         dovatsapxep.current[mesh.uuid]
+    //       ) {
+    //         dovatsapxep.current[mesh.uuid].body = bodyCannonRotate;
+    //       }
+    //     }
+    //   };
+    //   // interactableMeshes.current.push(mest);
+    // }
 
     // Interaction variables
     const offset = new THREE.Vector3();
@@ -2023,6 +2145,7 @@ const initFunc = forwardRef((props, ref) => {
     const animate = () => {
       requestAnimationFrame(animate);
 
+
       const deltaConnon = Math.min(clock.getDelta(), 0.1); // max 100ms
       worldCannonRef.current.step(1 / 60, deltaConnon);
 
@@ -2101,7 +2224,7 @@ const initFunc = forwardRef((props, ref) => {
       //   helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
       //   // helper.scale.copy(target.getWorldScale(new THREE.Vector3()));
       // });
-      cannonDebugger.update();
+      // cannonDebugger.update();
       if (
         arrBox3HelperAutoUpdate &&
         arrBox3HelperAutoUpdate.current &&
@@ -2125,6 +2248,11 @@ const initFunc = forwardRef((props, ref) => {
         sceneRef &&
         sceneRef.current
       ) {
+        syncCamera(camera, cameraMini)
+        syncCamera(camera, cameraCanvas)
+        helperCameraHelper.update()
+        debugRenderer.render(scene, cameraDebug); // render camera phụ
+        rendererMiniViewRefCanvas.render(scene, cameraMini); // render camera phụ
         rendererRef.current.render(sceneRef.current, cameraRef.current);
       }
     };
@@ -2141,6 +2269,7 @@ const initFunc = forwardRef((props, ref) => {
       rendererRef.current.domElement.removeEventListener("mouseup", onMouseUp);
     };
   }, []);
+
   function getGlobalTransform(mesh) {
     // Cập nhật matrixWorld nếu chưa cập nhật
     mesh.updateMatrixWorld(true);
@@ -2171,7 +2300,7 @@ const initFunc = forwardRef((props, ref) => {
           mesh.userData.isChildGroup = null;
           mesh.userData.targetGroup = null;
           mesh.userData.uuidTargetGroup = null;
-        } catch {}
+        } catch { }
         // scene.attach(mesh);
       });
     }
@@ -2204,7 +2333,7 @@ const initFunc = forwardRef((props, ref) => {
               objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid].body
             );
           }
-        } catch {}
+        } catch { }
         delete objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid];
       }
       if (
@@ -2217,7 +2346,7 @@ const initFunc = forwardRef((props, ref) => {
               objects_TuTacDong_Ref.current[mesh.uuid].body
             );
           }
-        } catch {}
+        } catch { }
         delete objects_TuTacDong_Ref.current[mesh.uuid];
       }
     });
@@ -2674,7 +2803,7 @@ const initFunc = forwardRef((props, ref) => {
                     scaleZ_Model = gridSize[1] / sizeZ;
                     try {
                       scaleModel = Math.min(scaleX_Model, scaleZ_Model);
-                    } catch {}
+                    } catch { }
                   }
                   // console.log("model222", _.cloneDeep(model));
                   // console.log("size=", size);
@@ -2697,7 +2826,7 @@ const initFunc = forwardRef((props, ref) => {
                   model.position.set(0, 0, 0);
                   // scene.add(model);
                   // modelRef.current = model;
-                } catch {}
+                } catch { }
                 resolve();
               },
               (error) => {
@@ -2784,11 +2913,11 @@ const initFunc = forwardRef((props, ref) => {
             } catch (e) {
               console.log(e);
             }
-          } catch {}
+          } catch { }
           resolve();
         }
       });
-    } catch {}
+    } catch { }
   };
 
   useEffect(() => {
@@ -2839,7 +2968,7 @@ const initFunc = forwardRef((props, ref) => {
                       scaleZ_Model = gridSize[1] / sizeZ;
                       try {
                         scaleModel = Math.min(scaleX_Model, scaleZ_Model);
-                      } catch {}
+                      } catch { }
                     }
                     console.log("model222", _.cloneDeep(model));
                     console.log("size=", size);
@@ -2862,7 +2991,7 @@ const initFunc = forwardRef((props, ref) => {
                     model.position.set(0, 0, 0);
                     scene.add(model);
                     // modelRef.current = model;
-                  } catch {}
+                  } catch { }
                   resolve();
                 },
                 (error) => {
@@ -3071,11 +3200,11 @@ const initFunc = forwardRef((props, ref) => {
               } catch (e) {
                 console.log(e);
               }
-            } catch {}
+            } catch { }
             resolve();
           }
         });
-      } catch {}
+      } catch { }
     }
 
     // Interaction variables
@@ -3755,7 +3884,7 @@ const initFunc = forwardRef((props, ref) => {
           floorHouse.material.needsUpdate = true;
         }
       };
-      // scene.add(floorHouse);
+      scene.add(floorHouse);
       floorRef.current = floorHouse;
     }
 
@@ -3776,7 +3905,7 @@ const initFunc = forwardRef((props, ref) => {
       try {
         controls.update();
         renderer.render(scene, camera);
-      } catch {}
+      } catch { }
     };
     animate();
 
@@ -3847,7 +3976,7 @@ const initFunc = forwardRef((props, ref) => {
             wallFillLightHelper4_2
           );
         }
-      } catch {}
+      } catch { }
       // renderer.dispose();
       // if (renderer.domElement) containerRef.current.removeChild(renderer.domElement);
     };
@@ -3890,7 +4019,7 @@ const initFunc = forwardRef((props, ref) => {
       selectedObjectRef.current = null;
     }
   };
-  useEffect(() => {}, [selectedObjectRef]);
+  useEffect(() => { }, [selectedObjectRef]);
 
   // expose hàm exportGLB cho App.js gọi
   useImperativeHandle(ref, () => ({
@@ -4170,7 +4299,7 @@ const initFunc = forwardRef((props, ref) => {
             const gltf = await loader.parseAsync(gltfText, ""); // path rỗng vì bạn dùng blob
             resolve(gltf.scene);
             return;
-          } catch {}
+          } catch { }
           resolve();
         }
       });
@@ -4191,7 +4320,7 @@ const initFunc = forwardRef((props, ref) => {
             scaleZ_Model = gridSize[1] / sizeZ;
             try {
               scaleModel = Math.min(scaleX_Model, scaleZ_Model);
-            } catch {}
+            } catch { }
           }
           const useGroup = useGroupRef.current;
           const meshSet = new Set();
@@ -4560,7 +4689,7 @@ const initFunc = forwardRef((props, ref) => {
           console.log("e", e);
         }
       }
-    } catch {}
+    } catch { }
     // try {
     //   if (arrMeshs && arrMeshs.length) {
     //     arrMeshs.forEach(child => {
@@ -4926,7 +5055,7 @@ const initFunc = forwardRef((props, ref) => {
       } catch (error) {
         console.error("Lỗi upload:", error);
       }
-    } catch {}
+    } catch { }
   }
   function setPositionY0() {
     const obj = selectedObjectRef.current;
@@ -4991,7 +5120,7 @@ const initFunc = forwardRef((props, ref) => {
       } catch (error) {
         console.error("Lỗi upload:", error);
       }
-    } catch {}
+    } catch { }
   };
   const [selectedRefObJSelected, setselectedRefObJSelected] = useState(null);
   const [positionSelectObjet, setpositionSelectObjet] = useState([0, 0, 0]);
@@ -5024,6 +5153,35 @@ const initFunc = forwardRef((props, ref) => {
     newPos[index] = parseFloat(value);
     setpositionSelectObjet(newPos);
   };
+  async function rotateBase64(srcBase64, degrees) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    const image = new Image();
+    image.src = srcBase64;
+    canvas.width = degrees % 180 === 0 ? image.width : image.height;
+    canvas.height = degrees % 180 === 0 ? image.height : image.width;
+
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(Math.PI);
+    ctx.scale(-1, 1);
+    ctx.drawImage(image, image.width / -2, image.height / -2);
+    return canvas.toDataURL();
+  }
+  function captureScene() {
+    cameraSphereRef.current.visible = false;
+    rendererRef.current.render(sceneRef.current, cameraRef.current); // đảm bảo gọi cái này trước
+    setTimeout(() => {
+      const canvas = rendererRef.current.domElement;
+      console.log("canvas", canvas)
+      const dataURL = canvas.toDataURL("image/png");
+      const link = document.createElement('a');
+      link.href = dataURL;
+      link.download = 'canvas-snapshot.png';
+      link.click();
+      cameraSphereRef.current.visible = true;
+    }, 1000);
+
+  }
 
   // 🔧 Hàm này sẽ render 3 input nếu meshRef tồn tại
   const renderPositionInputs = () => {
@@ -5598,7 +5756,9 @@ const initFunc = forwardRef((props, ref) => {
           />
         </div>
         <div className=" top-[180px] left-[15px] formControlLabel-display-grid flex-items-center">
-          <div>Camera</div>
+          <div>camera
+            <Button onClick={captureScene} className="ml-4" variant="contained" size="small">Captrue</Button>
+          </div>
           <div className="flex-items-center ml-2">
             X=
             <input
@@ -5671,6 +5831,12 @@ const initFunc = forwardRef((props, ref) => {
           </Button>
         </div>
         <div ref={containerRef} style={{ width: "100%", height: "100%" }} />
+        <div id="cameraView" style={{ width: '250px', height: '250px', position: 'fixed', bottom: '10px', right: '10px' }}>
+          <div ref={containerViewRef}></div>
+        </div>
+        <div id="miniView" style={{ width: '250px', height: '250px', position: 'fixed', bottom: '10px', right: '260px' }}>
+          <div ref={miniViewRef}></div>
+        </div>
       </div>
     </>
   );

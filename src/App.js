@@ -11,6 +11,8 @@
 // import Test8 from "./components/test8";
 // import Test9 from "./components/test9";
 // import Test10 from "./components/test10";
+// import Camera from "./components/camera";
+// import Minimapcamera from "./components/minimapcamera";
 // import Light from "./components/light";
 // import ExtrudeGeometry from "./components/ExtrudeGeometry";
 // import AddGroupThree from "./components/addGroupThree";
@@ -162,7 +164,10 @@
 //         {/* <Test4 /> */}
 //         {/* <Test5 ref={testRef} /> */}
 //         {/* <Test6 /> */}
-//         <Test7 />
+//         {/* <Test7 /> */}
+//         {/* <Camera /> */}
+//         <Minimapcamera />
+
 //         {/* <Test8 /> */}
 //         {/* <Test9 /> */}
 //         {/* <Test10 /> */}
