@@ -16,6 +16,8 @@ import CannonDebugger from "cannon-es-debugger";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { ConvexGeometry } from 'three/examples/jsm/geometries/ConvexGeometry.js';
+
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
 // import { SelectionBox } from "three/examples/jsm/interactive/SelectionBox.js";
 // import { SelectionHelper } from "three/examples/jsm/interactive/SelectionHelper.js";
@@ -1003,7 +1005,36 @@ const initFunc = forwardRef((props, ref) => {
   //     }
   //   }
   // }, [splitGroup]);
-
+  function worldCannonRemoveObj(obj) {
+    try {
+      if (
+        objects_2_RoiTuDo_Auto_Ref.current &&
+        objects_2_RoiTuDo_Auto_Ref.current[obj.uuid]
+      ) {
+        try {
+          if (worldCannonRef.current) {
+            worldCannonRef.current.removeBody(
+              objects_2_RoiTuDo_Auto_Ref.current[obj.uuid].body
+            );
+          }
+        } catch { }
+        delete objects_2_RoiTuDo_Auto_Ref.current[obj.uuid];
+      }
+      if (
+        objects_TuTacDong_Ref.current &&
+        objects_TuTacDong_Ref.current[obj.uuid]
+      ) {
+        try {
+          if (worldCannonRef.current) {
+            worldCannonRef.current.removeBody(
+              objects_TuTacDong_Ref.current[obj.uuid].body
+            );
+          }
+        } catch { }
+        delete objects_TuTacDong_Ref.current[obj.uuid];
+      }
+    } catch { }
+  }
   useEffect(() => {
     if (!splitGroup || useGroupRef.current) return;
     splitGroupRef.current = splitGroup;
@@ -1013,7 +1044,7 @@ const initFunc = forwardRef((props, ref) => {
     const meshSet = new Set();
 
     groups?.traverse((child) => {
-      if (child.isMesh) {
+      if (child.isMesh && child.userData && child.userData.isChildGroup) {
         meshSet.add(child);
       }
     });
@@ -1038,21 +1069,21 @@ const initFunc = forwardRef((props, ref) => {
         objTT.scale.copy(worldScale);
 
         // 4. Cập nhật lại Cannon body
-        const bodyEntry = objects_2_RoiTuDo_Auto_Ref.current[objTT.uuid];
+        // const bodyEntry = objects_2_RoiTuDo_Auto_Ref.current[objTT.uuid];
 
-        if (bodyEntry?.body instanceof CANNON.Body) {
-          const body = bodyEntry.body;
-          body.position.set(worldPos.x, worldPos.y, worldPos.z);
-          body.quaternion.set(
-            worldQuat.x,
-            worldQuat.y,
-            worldQuat.z,
-            worldQuat.w
-          );
-          body.velocity.set(0, 0, 0);
-          body.angularVelocity.set(0, 0, 0);
-          body.aabbNeedsUpdate = true;
-        }
+        // if (bodyEntry?.body instanceof CANNON.Body) {
+        //   const body = bodyEntry.body;
+        //   body.position.set(worldPos.x, worldPos.y, worldPos.z);
+        //   body.quaternion.set(
+        //     worldQuat.x,
+        //     worldQuat.y,
+        //     worldQuat.z,
+        //     worldQuat.w
+        //   );
+        //   body.velocity.set(0, 0, 0);
+        //   body.angularVelocity.set(0, 0, 0);
+        //   body.aabbNeedsUpdate = true;
+        // }
 
         // 5. Gán flag nếu cần (ví dụ để skip animate)
         objTT.userData.justDetached = true;
@@ -1089,34 +1120,7 @@ const initFunc = forwardRef((props, ref) => {
       if (groups.userData?.pivot) {
         scene.remove(groups.userData.pivot);
       }
-      try {
-        if (
-          objects_2_RoiTuDo_Auto_Ref.current &&
-          objects_2_RoiTuDo_Auto_Ref.current[groups.uuid]
-        ) {
-          try {
-            if (worldCannonRef.current) {
-              worldCannonRef.current.removeBody(
-                objects_2_RoiTuDo_Auto_Ref.current[groups.uuid].body
-              );
-            }
-          } catch { }
-          delete objects_2_RoiTuDo_Auto_Ref.current[groups.uuid];
-        }
-        if (
-          objects_TuTacDong_Ref.current &&
-          objects_TuTacDong_Ref.current[groups.uuid]
-        ) {
-          try {
-            if (worldCannonRef.current) {
-              worldCannonRef.current.removeBody(
-                objects_TuTacDong_Ref.current[groups.uuid].body
-              );
-            }
-          } catch { }
-          delete objects_TuTacDong_Ref.current[groups.uuid];
-        }
-      } catch { }
+      worldCannonRemoveObj(groups)
     }
   }, [splitGroup]);
 
@@ -1507,166 +1511,166 @@ const initFunc = forwardRef((props, ref) => {
     controls.update();
     controlsRef.current = controls;
 
-    // // Tạo mesh ví dụ
-    // let createBox = [];
-    // const boxGeo = new THREE.BoxGeometry(5, 5, 5);
-    // for (let i = 0; i < 20; i++) {
-    //   const boxMat = new THREE.MeshStandardMaterial({ color: 0x0088ff });
-    //   // const mesh = new THREE.Mesh(boxGeo, boxMat)
-    //   const mesh = new CustomMesh(boxGeo, boxMat);
-    //   mesh.position.set(
-    //     Math.random() * 200 - 25 + gridSize[0] / 2,
-    //     // Math.random() * 50 + 25,
-    //     0,
-    //     Math.random() * 200 - 25 + gridSize[1] / 2
-    //   );
-    //   mesh.userData.selectable = true;
-    //   mesh.userData.SelectionBox = true;
-    //   mesh.isSelectionBox = true;
-    //   dovatdichuyen.current.push(mesh);
-    //   scene.add(mesh);
-    //   createBox.push(mesh);
+    // Tạo mesh ví dụ
+    let createBox = [];
+    const boxGeo = new THREE.BoxGeometry(5, 5, 5);
+    for (let i = 0; i < 20; i++) {
+      const boxMat = new THREE.MeshStandardMaterial({ color: 0x0088ff });
+      // const mesh = new THREE.Mesh(boxGeo, boxMat)
+      const mesh = new CustomMesh(boxGeo, boxMat);
+      mesh.position.set(
+        Math.random() * 200 - 25 + gridSize[0] / 2,
+        // Math.random() * 50 + 25,
+        0,
+        Math.random() * 200 - 25 + gridSize[1] / 2
+      );
+      mesh.userData.selectable = true;
+      mesh.userData.SelectionBox = true;
+      mesh.isSelectionBox = true;
+      dovatdichuyen.current.push(mesh);
+      scene.add(mesh);
+      createBox.push(mesh);
 
-    //   // 2. Lấy kích thước box từ geometry (để tạo Collider)
-    //   boxGeo.computeBoundingBox();
-    //   const size = new THREE.Vector3();
-    //   boxGeo.boundingBox.getSize(size);
+      // 2. Lấy kích thước box từ geometry (để tạo Collider)
+      boxGeo.computeBoundingBox();
+      const size = new THREE.Vector3();
+      boxGeo.boundingBox.getSize(size);
 
-    //   // 3. Tạo shape và body Cannon.js
-    //   const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
-    //   const boxShape = new CANNON.Box(halfExtents);
-    //   // Material cho nền
-    //   const floorMaterial = new CANNON.Material("floorMaterial");
-    //   // Material cho vật
-    //   const boxMaterial = new CANNON.Material("boxMaterial");
-    //   const contactMaterial = new CANNON.ContactMaterial(
-    //     floorMaterial,
-    //     boxMaterial,
-    //     {
-    //       friction: 1, // ma sát: 0 (trơn) → 1 (rất nhám)
-    //       restitution: 0.0, // độ nảy: 0 (không nảy), 1 (nảy hết lực)
-    //     }
-    //   );
-    //   // mass được coi như là trọng lượng của vật để chịu lực g xét từ trước
-    //   const boxBody = new CANNON.Body({
-    //     mass: 1000, // đổi thành 0 nếu muốn đứng yên =>0 thì ko chịu tác động của lực, 1 thì chịu tác động của lực theo cách set có dùng lực hay ko
-    //     // type: CANNON.Body.KINEMATIC,
-    //     // type: CANNON.Body.STATIC,
-    //     shape: boxShape,
-    //     // material: new CANNON.Material('noBounce'),
-    //     material: contactMaterial,
-    //     linearDamping: 0.99, // Giảm trôi
-    //     angularDamping: 0.99, // Giảm lắc khi va chạm
-    //   });
+      // 3. Tạo shape và body Cannon.js
+      const halfExtents = new CANNON.Vec3(size.x / 2, size.y / 2, size.z / 2);
+      const boxShape = new CANNON.Box(halfExtents);
+      // Material cho nền
+      const floorMaterial = new CANNON.Material("floorMaterial");
+      // Material cho vật
+      const boxMaterial = new CANNON.Material("boxMaterial");
+      const contactMaterial = new CANNON.ContactMaterial(
+        floorMaterial,
+        boxMaterial,
+        {
+          friction: 1, // ma sát: 0 (trơn) → 1 (rất nhám)
+          restitution: 0.0, // độ nảy: 0 (không nảy), 1 (nảy hết lực)
+        }
+      );
+      // mass được coi như là trọng lượng của vật để chịu lực g xét từ trước
+      const boxBody = new CANNON.Body({
+        mass: 1000, // đổi thành 0 nếu muốn đứng yên =>0 thì ko chịu tác động của lực, 1 thì chịu tác động của lực theo cách set có dùng lực hay ko
+        // type: CANNON.Body.KINEMATIC,
+        // type: CANNON.Body.STATIC,
+        shape: boxShape,
+        // material: new CANNON.Material('noBounce'),
+        material: contactMaterial,
+        linearDamping: 0.99, // Giảm trôi
+        angularDamping: 0.99, // Giảm lắc khi va chạm
+      });
 
-    //   // 4. Đặt vị trí vật lý giống mesh
-    //   boxBody.position.set(mesh.position.x, mesh.position.y, mesh.position.z);
+      // 4. Đặt vị trí vật lý giống mesh
+      boxBody.position.set(mesh.position.x, mesh.position.y, mesh.position.z);
 
-    //   // 5. Thêm body vào thế giới vật lý
-    //   worldCannonRef.current.addBody(boxBody);
-    //   objects_TuTacDong_Ref.current[mesh.uuid] = {
-    //     mesh: mesh,
-    //     body: boxBody,
-    //   };
-    //   objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid] = {
-    //     mesh: mesh,
-    //     body: boxBody,
-    //   };
-    //   dovatsapxep.current[mesh.uuid] = {
-    //     mesh: mesh,
-    //     body: boxBody,
-    //   };
+      // 5. Thêm body vào thế giới vật lý
+      worldCannonRef.current.addBody(boxBody);
+      objects_TuTacDong_Ref.current[mesh.uuid] = {
+        mesh: mesh,
+        body: boxBody,
+      };
+      objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid] = {
+        mesh: mesh,
+        body: boxBody,
+      };
+      dovatsapxep.current[mesh.uuid] = {
+        mesh: mesh,
+        body: boxBody,
+      };
 
-    //   mesh.onTransformChange = (type, axis, newVal) => {
-    //     let bodyCannonRotate;
-    //     if (useTransformFromHand.current) {
-    //       if (
-    //         objects_TuTacDong_Ref.current &&
-    //         objects_TuTacDong_Ref.current[mesh.uuid]
-    //       ) {
-    //         if (
-    //           type == "position" ||
-    //           type == "rotation" ||
-    //           type == "quaternion"
-    //         ) {
-    //           updateTransformToFrom(
-    //             mesh,
-    //             objects_TuTacDong_Ref.current[mesh.uuid].body
-    //           );
-    //         } else if (type == "scale") {
-    //           mesh.updateMatrixWorld(true);
-    //           // 2. Tìm collider cũ (nếu có)
-    //           // 3. Loại bỏ body cũ khỏi world
-    //           worldCannonRef.current.removeBody(
-    //             objects_TuTacDong_Ref.current[mesh.uuid].body
-    //           );
+      mesh.onTransformChange = (type, axis, newVal) => {
+        let bodyCannonRotate;
+        if (useTransformFromHand.current) {
+          if (
+            objects_TuTacDong_Ref.current &&
+            objects_TuTacDong_Ref.current[mesh.uuid]
+          ) {
+            if (
+              type == "position" ||
+              type == "rotation" ||
+              type == "quaternion"
+            ) {
+              updateTransformToFrom(
+                mesh,
+                objects_TuTacDong_Ref.current[mesh.uuid].body
+              );
+            } else if (type == "scale") {
+              mesh.updateMatrixWorld(true);
+              // 2. Tìm collider cũ (nếu có)
+              // 3. Loại bỏ body cũ khỏi world
+              worldCannonRef.current.removeBody(
+                objects_TuTacDong_Ref.current[mesh.uuid].body
+              );
 
-    //           // 1. Lấy bounding box LOCAL của geometry gốc
-    //           const bbox =
-    //             mesh.geometry.boundingBox ||
-    //             mesh.geometry.clone().computeBoundingBox();
-    //           const sizeLocal = new THREE.Vector3();
-    //           bbox.getSize(sizeLocal);
-    //           const centerLocal = new THREE.Vector3();
-    //           bbox.getCenter(centerLocal);
+              // 1. Lấy bounding box LOCAL của geometry gốc
+              const bbox =
+                mesh.geometry.boundingBox ||
+                mesh.geometry.clone().computeBoundingBox();
+              const sizeLocal = new THREE.Vector3();
+              bbox.getSize(sizeLocal);
+              const centerLocal = new THREE.Vector3();
+              bbox.getCenter(centerLocal);
 
-    //           // 2. Lấy scale của mesh trong thế giới
-    //           const scaleWorld = new THREE.Vector3();
-    //           mesh.getWorldScale(scaleWorld);
+              // 2. Lấy scale của mesh trong thế giới
+              const scaleWorld = new THREE.Vector3();
+              mesh.getWorldScale(scaleWorld);
 
-    //           // 3. Tính lại size collider theo scale thực
-    //           const sizeWorld = sizeLocal.clone().multiply(scaleWorld);
-    //           const centerWorld = centerLocal
-    //             .clone()
-    //             .applyMatrix4(mesh.matrixWorld);
+              // 3. Tính lại size collider theo scale thực
+              const sizeWorld = sizeLocal.clone().multiply(scaleWorld);
+              const centerWorld = centerLocal
+                .clone()
+                .applyMatrix4(mesh.matrixWorld);
 
-    //           // 3. Tạo collider mới
-    //           const halfExtents = new CANNON.Vec3(
-    //             sizeWorld.x / 2,
-    //             sizeWorld.y / 2,
-    //             sizeWorld.z / 2
-    //           );
-    //           const shape = new CANNON.Box(halfExtents);
-    //           const newBody = new CANNON.Body({
-    //             mass: 1000, // đổi thành 0 nếu muốn đứng yên =>0 thì ko chịu tác động của lực, 1 thì chịu tác động của lực theo cách set có dùng lực hay ko
-    //             shape: shape,
-    //             material: contactMaterial,
-    //             linearDamping: 0.99, // Giảm trôi
-    //             angularDamping: 0.99, // Giảm lắc khi va chạm
-    //           });
+              // 3. Tạo collider mới
+              const halfExtents = new CANNON.Vec3(
+                sizeWorld.x / 2,
+                sizeWorld.y / 2,
+                sizeWorld.z / 2
+              );
+              const shape = new CANNON.Box(halfExtents);
+              const newBody = new CANNON.Body({
+                mass: 1000, // đổi thành 0 nếu muốn đứng yên =>0 thì ko chịu tác động của lực, 1 thì chịu tác động của lực theo cách set có dùng lực hay ko
+                shape: shape,
+                material: contactMaterial,
+                linearDamping: 0.99, // Giảm trôi
+                angularDamping: 0.99, // Giảm lắc khi va chạm
+              });
 
-    //           // 4. Đặt collider đúng vị trí & xoay
-    //           newBody.position.set(centerWorld.x, centerWorld.y, centerWorld.z);
-    //           const quat = new THREE.Quaternion();
-    //           mesh.getWorldQuaternion(quat);
-    //           newBody.quaternion.set(quat.x, quat.y, quat.z, quat.w);
-    //           newBody.aabbNeedsUpdate = true;
+              // 4. Đặt collider đúng vị trí & xoay
+              newBody.position.set(centerWorld.x, centerWorld.y, centerWorld.z);
+              const quat = new THREE.Quaternion();
+              mesh.getWorldQuaternion(quat);
+              newBody.quaternion.set(quat.x, quat.y, quat.z, quat.w);
+              newBody.aabbNeedsUpdate = true;
 
-    //           // 7. Thêm vào world mới
-    //           worldCannonRef.current.addBody(newBody);
-    //           objects_TuTacDong_Ref.current[mesh.uuid].body = newBody;
-    //           bodyCannonRotate = newBody;
-    //         }
-    //       }
-    //       if (
-    //         bodyCannonRotate &&
-    //         objects_2_RoiTuDo_Auto_Ref.current &&
-    //         objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid]
-    //       ) {
-    //         objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid].body =
-    //           bodyCannonRotate;
-    //       }
-    //       if (
-    //         bodyCannonRotate &&
-    //         dovatsapxep.current &&
-    //         dovatsapxep.current[mesh.uuid]
-    //       ) {
-    //         dovatsapxep.current[mesh.uuid].body = bodyCannonRotate;
-    //       }
-    //     }
-    //   };
-    //   // interactableMeshes.current.push(mest);
-    // }
+              // 7. Thêm vào world mới
+              worldCannonRef.current.addBody(newBody);
+              objects_TuTacDong_Ref.current[mesh.uuid].body = newBody;
+              bodyCannonRotate = newBody;
+            }
+          }
+          if (
+            bodyCannonRotate &&
+            objects_2_RoiTuDo_Auto_Ref.current &&
+            objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid]
+          ) {
+            objects_2_RoiTuDo_Auto_Ref.current[mesh.uuid].body =
+              bodyCannonRotate;
+          }
+          if (
+            bodyCannonRotate &&
+            dovatsapxep.current &&
+            dovatsapxep.current[mesh.uuid]
+          ) {
+            dovatsapxep.current[mesh.uuid].body = bodyCannonRotate;
+          }
+        }
+      };
+      // interactableMeshes.current.push(mest);
+    }
 
     // Interaction variables
     const offset = new THREE.Vector3();
@@ -2015,6 +2019,7 @@ const initFunc = forwardRef((props, ref) => {
                 selectable: true,
               };
               filterAllSelected2.push(obj);
+              worldCannonRemoveObj(obj)
               return true;
             } else if (
               obj.userData.meshBoudingBoxOfGroup &&
@@ -2038,8 +2043,11 @@ const initFunc = forwardRef((props, ref) => {
                       selectable: true,
                     };
                     filterAllSelected2.push(objjT);
+                    worldCannonRemoveObj(objjT)
                   }
                 });
+                worldCannonRemoveObj(obj)
+                worldCannonRemoveObj(obj.userData.targetGroup)
               }
               return true;
             }
@@ -2224,7 +2232,7 @@ const initFunc = forwardRef((props, ref) => {
       //   helper.quaternion.copy(target.getWorldQuaternion(new THREE.Quaternion()));
       //   // helper.scale.copy(target.getWorldScale(new THREE.Vector3()));
       // });
-      // cannonDebugger.update();
+      cannonDebugger.update();
       if (
         arrBox3HelperAutoUpdate &&
         arrBox3HelperAutoUpdate.current &&
@@ -2759,6 +2767,8 @@ const initFunc = forwardRef((props, ref) => {
 
     body.aabbNeedsUpdate = true;
   }
+
+
 
   const loadModelCommons = () => {
     // load ghe1,
@@ -4009,6 +4019,17 @@ const initFunc = forwardRef((props, ref) => {
   const handleDeleteSelected = () => {
     const obj = selectedObjectRef.current;
     if (obj) {
+      if (obj.isGroup) {
+        obj.traverse(child => {
+          worldCannonRemoveObj(child)
+        })
+        if (obj.userData && obj.userData.pivot) {
+          sceneRef.current.remove(obj.userData.pivot)
+        }
+      }
+      sceneRef.current.remove(obj)
+      worldCannonRemoveObj(obj)
+
       if (obj.parent) {
         obj.parent.remove(obj); // Xóa khỏi scene
       }
@@ -4522,10 +4543,10 @@ const initFunc = forwardRef((props, ref) => {
                       color: "blue",
                       wireframe: true,
                     });
-                    const bboxMesh = new THREE.Mesh(geo, mat);
-                    bboxMesh.name = "DebugBoundingBox";
-                    bboxMesh.visible = false;
-                    objTT.add(bboxMesh);
+                    // const bboxMesh = new THREE.Mesh(geo, mat);
+                    // bboxMesh.name = "DebugBoundingBox";
+                    // bboxMesh.visible = false;
+                    // objTT.add(bboxMesh);
 
                     // Thêm vào scene (chỉ objTT thôi, không objTTT)
                     // --- Tạo collider Cannon.js theo bounding box world space ---
