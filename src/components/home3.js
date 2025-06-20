@@ -12,6 +12,7 @@ import React, {
 import * as THREE from "three";
 import _, { isBuffer } from "lodash";
 import * as CANNON from "cannon-es";
+import { CSG } from 'three-csg-ts';
 import CannonDebugger from "cannon-es-debugger";
 import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
@@ -28,12 +29,19 @@ import { RectAreaLightHelper } from "three/examples/jsm/helpers/RectAreaLightHel
 import CustomMesh from "../utils/CustomMesh.js"; // ✅ đúng
 import CustomGroup from "../utils/CustomGroup.js"; // ✅ đúng
 import {
+  TextareaAutosize,
+  Checkbox,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Select,
   Dialog,
   Switch,
   FormControlLabel,
   Modal,
   Box,
   Button,
+  Slider,
   Typography,
   TransitionProps,
   Slide,
@@ -41,6 +49,7 @@ import {
   DialogContent,
   DialogContentText,
   DialogTitle,
+  useForkRef,
 } from "@mui/material";
 import "../styles/floorplanViewer.css";
 import { ColorPicker, useColor } from "react-color-palette";
@@ -49,6 +58,10 @@ import "react-color-palette/css";
 import JSZip from "jszip";
 import { MeshMatcapMaterial, ModelNode } from "three/webgpu";
 import { gapSize } from "three/tsl";
+
+
+
+const modelNameYolo = ['wall-detection-xi9ox', 'wall-window-door-detection-zltye', 'walldetector2', 'wall-window-door-detection', 'test-nsycv', 'segmentation-wall-door-window-yeaua']
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & {
@@ -581,6 +594,15 @@ function centerGeometryKeepY(geometry) {
 
 // export default function FloorplanViewer({ dataDeepFloorplan, wallHeight }) {
 const initFunc = forwardRef((props, ref) => {
+  const [showImgDetect, setshowImgDetect] = useState(true)
+  const refselectImgDetect = useRef()
+  const canvasbase64ImgDetect = useRef()
+  const [detectedRes, setdetectedRes] = useState()
+  const [modeShowCanvasDetect, setmodeShowCanvasDetect] = useState('Draw Confidence')
+  const [confidenceThreshold, setconfidenceThreshold] = useState(30);
+  const [overlapThreshold, setoverlapThreshold] = useState(50);
+  const [base64ImgDetect, setbase64ImgDetect] = useState({});
+  const [modelSelected, setmodelSelected] = useState('wall-detection-xi9ox');
   let sortingManager = null;
   const dispatch = useDispatch();
   const dovatdichuyen = useRef([]);
@@ -689,6 +711,76 @@ const initFunc = forwardRef((props, ref) => {
 
     return meshArray;
   }
+  function resetSence() {
+    const scene = sceneRef.current;
+    if (!scene) return
+    try {
+      if (
+        objects_RoiTuDo_Ref.current &&
+        Object.keys(objects_RoiTuDo_Ref.current).length
+      ) {
+        for (let key in objects_RoiTuDo_Ref.current) {
+          try {
+            if (worldCannonRef.current) {
+              worldCannonRef.current.removeBody(
+                objects_RoiTuDo_Ref.current[key].body
+              );
+            }
+          } catch { }
+        }
+      }
+      objects_RoiTuDo_Ref.current = {}
+      if (
+        objects_2_RoiTuDo_Auto_Ref.current &&
+        Object.keys(objects_2_RoiTuDo_Auto_Ref.current).length
+      ) {
+        for (let key in objects_2_RoiTuDo_Auto_Ref.current) {
+          try {
+            if (worldCannonRef.current) {
+              worldCannonRef.current.removeBody(
+                objects_2_RoiTuDo_Auto_Ref.current[key].body
+              );
+            }
+          } catch { }
+        }
+      }
+      objects_2_RoiTuDo_Auto_Ref.current = {}
+      if (
+        objects_TuTacDong_Ref.current &&
+        Object.keys(objects_TuTacDong_Ref.current).length
+      ) {
+        for (let key in objects_TuTacDong_Ref.current) {
+          try {
+            if (worldCannonRef.current) {
+              worldCannonRef.current.removeBody(
+                objects_TuTacDong_Ref.current[key].body
+              );
+            }
+          } catch { }
+        }
+      }
+    } catch { }
+    objects_TuTacDong_Ref.current = {}
+
+
+    // Xóa toàn bộ object trong scene
+    while (scene.children.length > 0) {
+      const child = scene.children[0];
+
+      // Nếu là mesh, dispose geometry & material
+      if (child.isMesh) {
+        child.geometry.dispose();
+        if (Array.isArray(child.material)) {
+          child.material.forEach(mat => mat.dispose());
+        } else {
+          child.material.dispose();
+        }
+      }
+      scene.remove(child);
+    }
+
+    // Optional: clear render target and reset background
+  }
   function startRandomBoxMovement(boxes, gridSize, step = 1) {
     startRandomBoxMovementIntervalRef.current = setInterval(() => {
       boxes.forEach((box) => {
@@ -726,6 +818,7 @@ const initFunc = forwardRef((props, ref) => {
     scene,
     color = "#dbe5e6",
     word = null,
+    boxDoor = null
   }) {
     // Tính kích thước thật khi vẽ Box
     const actualWidth = xWidth + thickness * 2;
@@ -768,9 +861,14 @@ const initFunc = forwardRef((props, ref) => {
       wireframe: false,
     });
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+    const meshSubStractDoor = new THREE.Mesh(geometry, material);
+    meshSubStractDoor.castShadow = true;
+    meshSubStractDoor.receiveShadow = true;
+
+    let mesh = meshSubStractDoor
+    if (boxDoor) {
+      mesh = CSG.subtract(meshSubStractDoor, boxDoor);
+    }
 
     // Tạo wireframe geometry và line segments
     const wireframeGeometry = new THREE.WireframeGeometry(geometry);
@@ -3370,6 +3468,7 @@ const initFunc = forwardRef((props, ref) => {
   }, [modelName]);
 
   useEffect(() => {
+    resetSence()
     if (
       dataDeepFloorplan &&
       dataDeepFloorplan.wall &&
@@ -3759,6 +3858,17 @@ const initFunc = forwardRef((props, ref) => {
     //   wallMeshes.push(wallMesh);
     //   wallUpdateT.push(wallMesh);
     // });
+
+    // 
+    // tạo 1 box cửa ở đây để substract;
+    const boxDoor = new THREE.Mesh(
+      new THREE.BoxGeometry(100, 150, 100), // rộng, cao, sâu
+      new THREE.MeshNormalMaterial({ color: 'red' })
+    );
+    boxDoor.position.set(111, 0, 181);
+    boxDoor.visible = false
+    scene.add(boxDoor)
+
     wallStoreV2.forEach(({ x, y, width, height }) => {
       const wallMesh = Wall3({
         x,
@@ -3768,6 +3878,7 @@ const initFunc = forwardRef((props, ref) => {
         height: wallHeightC,
         scene,
         color: wallColor,
+        boxDoor: boxDoor
       });
       wallMeshes.push(wallMesh);
       wallUpdateT.push(wallMesh);
@@ -4279,7 +4390,7 @@ const initFunc = forwardRef((props, ref) => {
       // renderer.dispose();
       // if (renderer.domElement) containerRef.current.removeChild(renderer.domElement);
     };
-  }, [wallStore, gridSize, floorStore]);
+  }, [wallStore, wallStoreV2, gridSize, floorStore]);
 
   useEffect(() => {
     if (gridSenceRef && gridSenceRef.current) {
@@ -5778,7 +5889,163 @@ const initFunc = forwardRef((props, ref) => {
       }
     }
   }
+  function handleSelectImgDetect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
 
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = reader.result; // dạng: "data:image/jpeg;base64,..."
+      setbase64ImgDetect({
+        imgbase64: result,
+        file: file
+      })
+    };
+
+    reader.readAsDataURL(file);
+  }
+  useEffect(() => {
+    if (!base64ImgDetect?.imgbase64) return;
+
+    const canvas = canvasbase64ImgDetect.current;
+    const ctx = canvas.getContext("2d");
+    const img = new Image();
+    console.log("ve lai anh roi nhe")
+
+    img.onload = () => {
+      // Set canvas size = container (hoặc ảnh gốc nếu không giới hạn)
+      const fixedHeight = 500;
+      const scale = fixedHeight / img.height;
+      const scaledWidth = img.width * scale;
+
+      canvas.width = scaledWidth;
+      canvas.height = fixedHeight;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (showImgDetect) {
+        ctx.drawImage(img, 0, 0, scaledWidth, fixedHeight);
+      }
+      const predictions = detectedRes?.predictions.filter(item => item.confidence != null && item.confidence >= confidenceThreshold / 100)
+      // Vẽ box
+      if (predictions && predictions.length) {
+        predictions.forEach((p) => {
+          // const x = (p.x - p.width / 2) * scale;
+          // const y = (p.y - p.height / 2) * scale;
+          // const boxW = p.width * scale;
+          // const boxH = p.height * scale;
+
+          // // Vẽ khung box
+          // ctx.strokeStyle = "red";
+          // ctx.lineWidth = 2;
+          // ctx.strokeRect(x, y, boxW, boxH);
+
+          // // Vẽ nhãn
+          // const label = `${p.class || p.name || "label"} (${Math.round(p.confidence * 100)}%)`;
+          // ctx.fillStyle = "red";
+          // ctx.font = "14px Arial";
+          // ctx.fillText(label, x + 4, y - 6);
+
+          const x = (p.x - p.width / 2) * scale;
+          const y = (p.y - p.height / 2) * scale;
+          const boxW = p.width * scale;
+          const boxH = p.height * scale;
+          if (modeShowCanvasDetect !== 'Censor Predictions') {
+            // VẼ BOX luôn cho cả 3 mode còn lại
+            if (p.class == 'door') {
+              ctx.strokeStyle = "green";
+            } else {
+              ctx.strokeStyle = "red";
+            }
+
+            ctx.lineWidth = 2;
+            ctx.strokeRect(x, y, boxW, boxH);
+          }
+
+          if (modeShowCanvasDetect === 'Draw Labels') {
+            const label = `${p.class || p.name || "label"} ${Math.round(p.confidence * 100)}%`;
+            ctx.fillStyle = "blue";
+            ctx.font = "14px Arial";
+            ctx.fillText(label, x + 4, y - 6);
+          }
+
+          if (modeShowCanvasDetect === 'Draw Confidence') {
+            const confidence = `${Math.round(p.confidence * 100)}%`;
+            ctx.fillStyle = "blue";
+            ctx.font = "14px Arial";
+            ctx.fillText(confidence, x + 4, y + boxH + 14);
+          }
+
+          if (modeShowCanvasDetect === 'Censor Predictions') {
+            ctx.fillStyle = "#add123";
+            ctx.fillRect(x, y, boxW, boxH);
+          }
+        });
+      }
+
+    };
+
+    img.src = base64ImgDetect.imgbase64;
+  }, [base64ImgDetect, detectedRes, confidenceThreshold, modeShowCanvasDetect, showImgDetect]);
+
+
+  async function updateDataHouse() {
+    const predictions = detectedRes?.predictions.filter(item => item.confidence != null && item.confidence >= confidenceThreshold / 100)
+    if (predictions) {
+      const predictions_tem = predictions.map(p => {
+        const x_start = p.x - p.width / 2;
+        const y_start = p.y - p.height / 2;
+        return {
+          ...p,
+          x: x_start,
+          y: y_start,
+        };
+      });
+      console.log("predictions", predictions)
+      console.log("predictions_tem", predictions_tem)
+      const gridSize = detectedRes?.gridSize
+      console.log("gridSize=", gridSize)
+      setWallStoreV2(predictions_tem);
+      setGridSize(gridSize);
+    }
+  }
+  async function detectWallDoor() {
+    const file = base64ImgDetect.file;
+    const modelName = modelSelected
+    if (!modelName || !file) return
+    let versionModel = 1;
+    if (modelName == 'wall-detection-xi9ox') {
+      versionModel = 2
+    }
+    if (modelName == 'floor-plan-walls') {
+      versionModel = 5
+    }
+    if (modelName == 'wall-window-door-detection-zltye') {
+      versionModel = 3
+    }
+    if (modelName == 'floor-plan-walls-wlx1j') {
+      versionModel = 2
+    }
+
+
+    try {
+      const formData = new FormData();
+      formData.append('image', file); // 'image' là tên field backend mong đợi
+      formData.append('modelVersion', versionModel); // 'image' là tên field backend mong đợi
+      formData.append('modelName', modelName); // 'image' là tên field backend mong đợi
+      formData.append('confidenceThreshold', confidenceThreshold); // 'image' là tên field backend mong đợi
+      formData.append('overlapThreshold', overlapThreshold); // 'image' là tên field backend mong đợi
+      const response = await fetch('http://127.0.0.1:8000/detect-wall-door', {
+        method: 'POST',
+        body: formData,
+      });
+      const responseFM = await response.json();
+      if (responseFM && responseFM.data) {
+        setdetectedRes(responseFM.data)
+      }
+    } catch { }
+
+  }
   function sapxepdovatngaunhien() {
     const gridSize = [200, 200];
     const objects = Object.values(dovatsapxep.current);
@@ -6154,6 +6421,117 @@ const initFunc = forwardRef((props, ref) => {
         <div id="miniView" style={{ width: '250px', height: '250px', position: 'fixed', bottom: '10px', right: '260px' }}>
           <div ref={miniViewRef}></div>
         </div>
+      </div>
+      <div className="fixed top-[150px] right-[10px] border p-4">
+        <div>
+          <Button variant="contained" onClick={() => { refselectImgDetect.current?.click() }}>Chọn Ảnh</Button>
+          <input className="hidden" type="file" ref={refselectImgDetect} onInput={handleSelectImgDetect} />
+          <FormControl fullWidth className="ml-2 max-w-[150px]" size="small">
+            <InputLabel id="demo-simple-select-label">Model</InputLabel>
+            <Select
+              labelId="demo-simple-select-label"
+              id="demo-simple-select"
+              value={modelSelected}
+              label="Model"
+              onChange={(e) => { setmodelSelected(e.target.value) }}
+            >
+              <MenuItem value=''></MenuItem>
+              {modelNameYolo.map((name) => (
+                <MenuItem key={name} value={name}>
+                  {name}
+                </MenuItem>
+              ))}
+              {/* <MenuItem value='wall-detection-xi9ox'>wall-detection-xi9ox</MenuItem>
+              <MenuItem value='walldetector2'>walldetector2</MenuItem>
+              <MenuItem value='wall-window-door-detection'>wall-window-door-detection</MenuItem>
+              <MenuItem value='test-nsycv'>test-nsycv</MenuItem>
+              <MenuItem value='segmentation-wall-door-window-yeaua'>segmentation-wall-door-window-yeaua</MenuItem> */}
+
+            </Select>
+          </FormControl>
+          <Button variant="contained" onClick={detectWallDoor}>Detection</Button>
+          <Button variant="contained" onClick={updateDataHouse}>Update House</Button>
+        </div>
+        <div className="flex items-start justify-between">
+          <div className="predict-img min-w-[500px] h-[500px] border mr-4 p-2">
+            {/* <img src={base64ImgDetect?.imgbase64} /> */}
+            <canvas ref={canvasbase64ImgDetect} width="500" height="500" className="" />
+          </div>
+          <div className="predict-container-1 border  p-2">
+            <div className="predict-container-param1">
+              <label>Confidence Threshold:</label> <br />
+              <Slider
+                valueLabelDisplay="on"
+                aria-label="Temperature"
+                defaultValue={30}
+                value={confidenceThreshold}
+                onChange={(e, newVal) => { setconfidenceThreshold(newVal) }}
+                // getAriaValueText={valuetext}
+                color="secondary"
+              />
+            </div>
+            <div className="predict-container-param2">
+              <label>Overlap Threshold:</label> <br />
+              <Slider
+                valueLabelDisplay="on"
+                aria-label="Temperature"
+                defaultValue={30}
+                value={overlapThreshold}
+                onChange={(e, newVal) => { setoverlapThreshold(newVal) }}
+                // getAriaValueText={valuetext}
+                color="secondary"
+              />
+            </div>
+            <div>
+              <FormControlLabel
+                control={<Checkbox checked={showImgDetect}
+                  onChange={(e) => setshowImgDetect(e.target.checked)} />}
+                label="Show Image:"
+                labelPlacement="start" // ← Label nằm bên trái
+              />
+            </div>
+            <FormControl fullWidth className="ml-2 max-w-[150px]" size="small">
+              <InputLabel id="demo-simple-select-label">Mode show</InputLabel>
+              <Select
+                labelId="demo-simple-select-label"
+                id="demo-simple-select"
+                value={modeShowCanvasDetect}
+                label="Model"
+                onChange={(e) => { setmodeShowCanvasDetect(e.target.value) }}
+              >
+                <MenuItem value='Draw Confidence'>Draw Confidence</MenuItem>
+                <MenuItem value='Draw Labels'>Draw Labels</MenuItem>
+                <MenuItem value='Draw Boxes'>Draw Boxes</MenuItem>
+                <MenuItem value='Censor Predictions'>Censor Predictions</MenuItem>
+
+              </Select>
+            </FormControl>
+
+
+            <div className="predict-container-response mt-4">
+              <TextareaAutosize
+                className="!boder p-2"
+                aria-label="minimum height"
+                minRows={5}
+                maxRows={12}
+                placeholder=""
+                value={detectedRes && detectedRes.predictions ? JSON.stringify(detectedRes?.predictions) : ''}
+                style={{
+                  maxWidth: 200,
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  padding: '8px',
+                  outline: 'none',
+                  fontFamily: 'inherit',
+                  fontSize: '14px',
+                  whiteSpace: 'pre-wrap', // giữ định dạng xuống dòng
+                }}
+              />
+            </div>
+          </div>
+        </div>
+
+
       </div>
     </>
   );

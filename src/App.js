@@ -11,7 +11,12 @@
 // import Test8 from "./components/test8";
 // import Test9 from "./components/test9";
 // import Test10 from "./components/test10";
+// import Test12 from "./components/test12";
+// import Test13 from "./components/test13";
+// import Test15 from "./components/test15";
 // import Camera from "./components/camera";
+// import CustomWall from "./components/customWall";
+
 // import Minimapcamera from "./components/minimapcamera";
 // import Light from "./components/light";
 // import ExtrudeGeometry from "./components/ExtrudeGeometry";
@@ -165,8 +170,15 @@
 //         {/* <Test5 ref={testRef} /> */}
 //         {/* <Test6 /> */}
 //         {/* <Test7 /> */}
+//         {/* <Test12 /> */}
+//         {/* <Test13 /> */}
+//         <Test15 />
+
+//         {/* <CustomWall /> */}
+
+
 //         {/* <Camera /> */}
-//         <Minimapcamera />
+//         {/* <Minimapcamera /> */}
 
 //         {/* <Test8 /> */}
 //         {/* <Test9 /> */}
@@ -194,6 +206,7 @@ import FloorplanViewer from './components/floorplanViewer';
 import FloorplanViewer2 from './components/floorplanViewer2';
 import Home from './components/home';
 import Home1 from './components/home1';
+import Home3 from './components/home3';
 import { Button as BtnMaterial } from '@mui/material';
 import './styles/floorplanViewer.css'
 import RangeSlider from "react-range-slider-input";
@@ -455,7 +468,8 @@ function App() {
         {/* <AddSencery /> */}
         {/* <FloorplanViewer dataDeepFloorplan={dataDeepFloorplan} wallHeight={wallHeight[1]} ref={refExportModel} /> */}
         {/* <FloorplanViewer2 dataDeepFloorplan={dataDeepFloorplan} wallHeight={wallHeight[1]} ref={refExportModel} /> */}
-        <Home dataDeepFloorplan={dataDeepFloorplan} mergeWallsT={mergeWallsT} modelName={modelName} wallHeight={wallHeight[1]} ref={refExportModel} />
+        {/* <Home dataDeepFloorplan={dataDeepFloorplan} mergeWallsT={mergeWallsT} modelName={modelName} wallHeight={wallHeight[1]} ref={refExportModel} /> */}
+        <Home3 dataDeepFloorplan={dataDeepFloorplan} mergeWallsT={mergeWallsT} modelName={modelName} wallHeight={wallHeight[1]} ref={refExportModel} />
         {/* <Home1 dataDeepFloorplan={dataDeepFloorplan} mergeWallsT={mergeWallsT} modelName={modelName} wallHeight={wallHeight[1]} ref={refExportModel} /> */}
       </div>
     </>
