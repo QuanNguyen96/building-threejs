@@ -50,6 +50,7 @@ import {
   DialogContentText,
   DialogTitle,
   useForkRef,
+  patch,
 } from "@mui/material";
 import "../styles/floorplanViewer.css";
 import { ColorPicker, useColor } from "react-color-palette";
@@ -592,8 +593,17 @@ function centerGeometryKeepY(geometry) {
   return new THREE.Vector3(center.x, 0, center.z);
 }
 
+
 // export default function FloorplanViewer({ dataDeepFloorplan, wallHeight }) {
+// CẦN CÓ 1 QUY ƯỚC VỀ ĐƠN VỊ
+// ĐƠN VỊ TRONG THREEJS HAY 3D NÊN ĐƯỢC LẤY 1 ĐƠN VỊ = 1MM (THỰC TẾ)
+// VÀ TỪ TỈ LỆ BẢN ĐỒ  HOẶC ĐỌC ĐƯỜNG VD 10 PIXEL=2M => 1 PIXEL =2/10=0.2M=20MM=20 Ô ĐƠN VỊ THREE,
 const initFunc = forwardRef((props, ref) => {
+  const [unitThreeToMM, setunitThreeToMM] = useState(1)  // tức là 1 đơn vị three = 1mm
+  // 200pixel tương ứng với 5m=5000mm => 1pixel=25mm
+  const [unitPixelToMM, setunitPixelToMM] = useState(1)
+  const [unitPixelToThree, setunitPixelToThree] = useState(unitThreeToMM * unitPixelToMM)
+  const [showFormDetect, setshowFormDetect] = useState(true)
   const [showImgDetect, setshowImgDetect] = useState(true)
   const refselectImgDetect = useRef()
   const canvasbase64ImgDetect = useRef()
@@ -602,7 +612,7 @@ const initFunc = forwardRef((props, ref) => {
   const [confidenceThreshold, setconfidenceThreshold] = useState(30);
   const [overlapThreshold, setoverlapThreshold] = useState(50);
   const [base64ImgDetect, setbase64ImgDetect] = useState({});
-  const [modelSelected, setmodelSelected] = useState('wall-detection-xi9ox');
+  const [modelSelected, setmodelSelected] = useState('wall-window-door-detection');
   let sortingManager = null;
   const dispatch = useDispatch();
   const dovatdichuyen = useRef([]);
@@ -635,6 +645,7 @@ const initFunc = forwardRef((props, ref) => {
   const [checkMoveOXZ, setCheckMoveOXZ] = useState(true);
   const onlyMoveOnOXZRef = useRef(checkMoveOXZ);
   const [wallStoreV2, setWallStoreV2] = useState([]);
+  const [doorStoreV2, setdoorStoreV2] = useState([]);
   const [wallStore, setWallStore] = useState([
     // { start: [0, 90], end: [0, 100] },
     // { start: [0, 200], end: [200, 0] },
@@ -818,11 +829,13 @@ const initFunc = forwardRef((props, ref) => {
     scene,
     color = "#dbe5e6",
     word = null,
-    boxDoor = null
+    doors = {}
   }) {
     // Tính kích thước thật khi vẽ Box
-    const actualWidth = xWidth + thickness * 2;
-    const actualDepth = zWidth + thickness * 2;
+    // const actualWidth = xWidth + thickness * 2;
+    // const actualDepth = zWidth + thickness * 2;
+    const actualWidth = xWidth;
+    const actualDepth = zWidth;
     let physicsWorld = word;
     if (!physicsWorld && worldCannonRef && worldCannonRef.current) {
       physicsWorld = worldCannonRef.current;
@@ -861,14 +874,10 @@ const initFunc = forwardRef((props, ref) => {
       wireframe: false,
     });
 
-    const meshSubStractDoor = new THREE.Mesh(geometry, material);
-    meshSubStractDoor.castShadow = true;
-    meshSubStractDoor.receiveShadow = true;
+    let mesh = new THREE.Mesh(geometry, material);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
 
-    let mesh = meshSubStractDoor
-    if (boxDoor) {
-      mesh = CSG.subtract(meshSubStractDoor, boxDoor);
-    }
 
     // Tạo wireframe geometry và line segments
     const wireframeGeometry = new THREE.WireframeGeometry(geometry);
@@ -887,6 +896,20 @@ const initFunc = forwardRef((props, ref) => {
 
     // Đặt tâm khối box vào giữa vùng phủ của tường (bao gồm cả dày)
     mesh.position.set(x + xWidth / 2, height / 2, z + zWidth / 2);
+
+    // if (boxDoor) {
+    //   boxDoor.updateMatrix();
+    //   mesh.updateMatrix();
+    //   mesh = CSG.subtract(mesh, boxDoor);
+    // }
+
+    try {
+      for (let kd in doors) {
+        doors[kd].updateMatrix();
+        mesh.updateMatrix();
+        mesh = CSG.subtract(mesh, doors[kd]);
+      }
+    } catch { }
 
     if (physicsWorld) {
       const halfExtents = new CANNON.Vec3(
@@ -929,6 +952,8 @@ const initFunc = forwardRef((props, ref) => {
       mesh.userData.physicsBody = body; // nếu cần cập nhật/sync sau
     }
 
+
+
     // Cập nhật chiều cao
     mesh.updateHeight = (newHeight) => {
       const oldHeight = height;
@@ -949,6 +974,36 @@ const initFunc = forwardRef((props, ref) => {
 
       // Cập nhật lại vị trí y để đáy wall vẫn ở y=0
       mesh.position.y = newHeight / 2;
+
+      // if (boxDoor) {
+      //   const tempMesh = new THREE.Mesh(newGeometry, mesh.material.clone());
+      //   tempMesh.position.copy(mesh.position);
+      //   tempMesh.rotation.copy(mesh.rotation);
+      //   tempMesh.scale.copy(mesh.scale);
+      //   tempMesh.updateMatrix();
+      //   boxDoor.updateMatrix();
+      //   // 3. Dùng CSG để cắt
+      //   const resultMeshMask = CSG.subtract(tempMesh, boxDoor);
+      //   mesh.geometry = resultMeshMask.geometry;
+      // }
+
+      try {
+        const tempMesh = new THREE.Mesh(newGeometry, mesh.material.clone());
+        tempMesh.position.copy(mesh.position);
+        tempMesh.rotation.copy(mesh.rotation);
+        tempMesh.scale.copy(mesh.scale);
+        tempMesh.updateMatrix();
+
+        for (let kd in doors) {
+          doors[kd].updateMatrix();
+          tempMesh.updateMatrix(); // cập nhật lại nếu cần
+          const result = CSG.subtract(tempMesh, doors[kd]);
+          tempMesh.geometry.dispose(); // tránh leak
+          tempMesh.geometry = result.geometry;
+        }
+        mesh.geometry = tempMesh.geometry;
+      } catch { }
+
       // Cập nhật wireframe
       if (mesh.userData.wireframe) {
         const wf = mesh.userData.wireframe;
@@ -980,8 +1035,10 @@ const initFunc = forwardRef((props, ref) => {
       }
     };
 
+    // scene.add(meshClone);
     scene.add(mesh);
     return mesh;
+    // return meshClone;
   }
   useEffect(() => {
     useGroupRef.current = useGroup;
@@ -1262,8 +1319,8 @@ const initFunc = forwardRef((props, ref) => {
     let modelDoor;
     try {
       modelDoor =
-        modelThreeCommonRefT["door-window"][
-        Object.keys(modelThreeCommonRefT["door-window"])[0]
+        modelThreeCommonRefT["door"][
+        Object.keys(modelThreeCommonRefT["door"])[0]
         ];
     } catch { }
     // door-window
@@ -2868,164 +2925,199 @@ const initFunc = forwardRef((props, ref) => {
 
 
 
-  const loadModelCommons = () => {
+  const loadModelCommons = async () => {
     // load ghe1,
-    try {
-      new Promise(async (resolve) => {
-        let path1 = "/models/source/door1.zip";
-        const file = await createFileFromUrl(path1, "door1.zip");
-        if (!file) return;
-        let scaleModel = 0.5;
-        let scaleX_Model = 0.8,
-          scaleY_Model = 0.8,
-          scaleZ_Model = 0.8;
-        //  const scaleModel = 1
-        let fileName = file.name;
-        let typeFile = fileName.split(".").pop(); // 'txt'
-        if (typeFile == "glb") {
-          const loader = new GLTFLoader();
-          // Optional: DRACO support nếu file nén
-          const dracoLoader = new DRACOLoader();
-          dracoLoader.setDecoderPath("/js/libs/draco/");
-          loader.setDRACOLoader(dracoLoader);
-          const reader = new FileReader();
-          reader.onload = function (e) {
-            const arrayBuffer = e.target.result;
-            loader.parse(
-              arrayBuffer,
-              "",
-              (gltf) => {
-                try {
-                  const model = gltf.scene;
-                  const box = new THREE.Box3().setFromObject(model);
-                  const size = new THREE.Vector3();
-                  let sizeX = 1,
-                    sizeY = 1,
-                    sizeZ = 1;
-                  const sizeBox = box.getSize(size); // size sẽ chứa width, height, depth
-                  if (sizeBox && sizeBox.x && sizeBox.y && sizeBox.z) {
-                    sizeX = sizeBox.x;
-                    sizeY = sizeBox.y;
-                    sizeZ = sizeBox.z;
-                    scaleX_Model = gridSize[0] / sizeX;
-                    scaleZ_Model = gridSize[1] / sizeZ;
-                    try {
-                      scaleModel = Math.min(scaleX_Model, scaleZ_Model);
-                    } catch { }
-                  }
-                  // console.log("model222", _.cloneDeep(model));
-                  // console.log("size=", size);
-                  // console.log("sizeBox=", sizeBox);
-                  // console.log("grid size hien tai", gridSize);
-                  // console.log("wall heigh", wallHeight);
-                  model.traverse((child) => {
-                    if (child.isMesh) {
-                      child.castShadow = true;
-                      child.material.side = THREE.DoubleSide;
-                      interactableMeshes.current.push(child);
+    let modelStore = {
+      door: {
+        data: [
+          // {
+          //   path: "/models/source/door1.zip",
+          //   name: "door1",
+          // },
+          {
+            path: "/models/source/door2.zip",
+            name: "door1",
+          }
+        ]
+      },
+      window: {
+        data: [
+          {
+            path: "/models/source/window1.zip",
+            name: "window1",
+          }
+        ]
+      }
+    }
+    let promiseAll = []
+    for (let modelName in modelStore) {
+      if (modelStore[modelName].data && modelStore[modelName].data.length) {
+        for (let i = 0; i < modelStore[modelName].data.length; i++) {
+          const promiseC = new Promise(async (resolve) => {
+            try {
+              let path1 = modelStore[modelName].data[i].path;
+              let splitPath = path1.split('/')
+              let fileNameT = splitPath[splitPath.length - 1]
+              console.log("doc file", fileNameT)
+              const file = await createFileFromUrl(path1, fileNameT);
+              if (!file) return;
+              let scaleModel = 0.5;
+              let scaleX_Model = 0.8,
+                scaleY_Model = 0.8,
+                scaleZ_Model = 0.8;
+              //  const scaleModel = 1
+              let fileName = file.name;
+              let typeFile = fileName.split(".").pop(); // 'txt'
+              if (typeFile == "glb") {
+                const loader = new GLTFLoader();
+                // Optional: DRACO support nếu file nén
+                const dracoLoader = new DRACOLoader();
+                dracoLoader.setDecoderPath("/js/libs/draco/");
+                loader.setDRACOLoader(dracoLoader);
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                  const arrayBuffer = e.target.result;
+                  loader.parse(
+                    arrayBuffer,
+                    "",
+                    (gltf) => {
+                      try {
+                        const model = gltf.scene;
+                        const box = new THREE.Box3().setFromObject(model);
+                        const size = new THREE.Vector3();
+                        let sizeX = 1,
+                          sizeY = 1,
+                          sizeZ = 1;
+                        const sizeBox = box.getSize(size); // size sẽ chứa width, height, depth
+                        if (sizeBox && sizeBox.x && sizeBox.y && sizeBox.z) {
+                          sizeX = sizeBox.x;
+                          sizeY = sizeBox.y;
+                          sizeZ = sizeBox.z;
+                          scaleX_Model = gridSize[0] / sizeX;
+                          scaleZ_Model = gridSize[1] / sizeZ;
+                          try {
+                            scaleModel = Math.min(scaleX_Model, scaleZ_Model);
+                          } catch { }
+                        }
+                        // console.log("model222", _.cloneDeep(model));
+                        // console.log("size=", size);
+                        // console.log("sizeBox=", sizeBox);
+                        // console.log("grid size hien tai", gridSize);
+                        // console.log("wall heigh", wallHeight);
+                        model.traverse((child) => {
+                          if (child.isMesh) {
+                            child.castShadow = true;
+                            child.material.side = THREE.DoubleSide;
+                            interactableMeshes.current.push(child);
+                          }
+                        });
+
+                        // model.scale.set(0.001 * scaleModel, 0.001 * scaleModel, 0.001 * scaleModel);
+                        // model.scale.set(1 * scaleModel, 1 * scaleModel, 1 * scaleModel);
+                        model.scale.set(scaleModel, scaleModel, scaleModel);
+                        // console.log(`scaleX_Model=${scaleX_Model} scaleY_Model=${scaleY_Model} scaleZ_Model=${scaleZ_Model} scaleModel=${scaleModel}`)
+                        //  model.scale.set(sizeX, sizeX, sizeX);
+                        model.position.set(0, 0, 0);
+                        // scene.add(model);
+                        // modelRef.current = model;
+                      } catch { }
+                      resolve();
+                    },
+                    (error) => {
+                      resolve();
+                      console.error("Lỗi khi parse GLB:", error);
                     }
+                  );
+                };
+                reader.readAsArrayBuffer(file);
+              } else if (typeFile == "zip") {
+                try {
+                  const zip = await JSZip.loadAsync(file);
+                  // Tìm file scene.gltf trong zip
+                  const gltfEntry = Object.values(zip.files).find((f) =>
+                    f.name.endsWith(".gltf")
+                  );
+                  if (!gltfEntry) {
+                    console.error("Không tìm thấy file .gltf trong zip");
+                    return;
+                  }
+
+                  const gltfText = await gltfEntry.async("string");
+
+                  // Tạo blob URLs cho resource phụ
+                  const blobUrlMap = {};
+                  await Promise.all(
+                    Object.values(zip.files).map(async (file) => {
+                      const name = file.name;
+                      if (/\.(bin|png|jpg|jpeg|gif|tga|ktx2|txt)$/i.test(name)) {
+                        const blob = await file.async("blob");
+                        blobUrlMap[name] = URL.createObjectURL(blob);
+                      }
+                    })
+                  );
+
+                  // ✅ Tạo manager và setURLModifier
+                  const manager = new THREE.LoadingManager();
+                  manager.setURLModifier((url) => {
+                    const normalized = url.replace(/^(\.\/|\/)/, ""); // fix đường dẫn có ./ hoặc /
+                    return blobUrlMap[normalized] || url;
                   });
 
-                  // model.scale.set(0.001 * scaleModel, 0.001 * scaleModel, 0.001 * scaleModel);
-                  // model.scale.set(1 * scaleModel, 1 * scaleModel, 1 * scaleModel);
-                  model.scale.set(scaleModel, scaleModel, scaleModel);
-                  // console.log(`scaleX_Model=${scaleX_Model} scaleY_Model=${scaleY_Model} scaleZ_Model=${scaleZ_Model} scaleModel=${scaleModel}`)
-                  //  model.scale.set(sizeX, sizeX, sizeX);
-                  model.position.set(0, 0, 0);
-                  // scene.add(model);
-                  // modelRef.current = model;
+                  // ✅ Truyền manager vào loader
+                  const loader = new GLTFLoader(manager);
+
+                  // Optional: DRACO support nếu cần
+                  const dracoLoader = new DRACOLoader();
+                  dracoLoader.setDecoderPath("/js/libs/draco/");
+                  loader.setDRACOLoader(dracoLoader);
+
+                  // Load từ gltfText
+                  const gltf = await loader.parseAsync(gltfText, ""); // path rỗng vì bạn dùng blob
+                  try {
+                    const model = gltf.scene;
+                    const box = new THREE.Box3().setFromObject(model);
+                    const size = new THREE.Vector3();
+                    let sizeX = 1,
+                      sizeY = 1,
+                      sizeZ = 1;
+                    const sizeBox = box.getSize(size); // size sẽ chứa width, height, depth
+                    model.traverse((child) => {
+                      if (child.isMesh) {
+                        child.castShadow = true;
+                        child.material.side = THREE.DoubleSide;
+                        interactableMeshes.current.push(child);
+                      }
+                    });
+                    if (!modelThreeCommonRef.current[modelName]) {
+                      modelThreeCommonRef.current[modelName] = {};
+                    }
+                    modelThreeCommonRef.current[modelName][model.uuid] = model;
+                    // const model1 = model.clone()
+                    // model1.scale.set(scaleModel, scaleModel, scaleModel);
+                    // // model1.scale.x *= -1;
+                    // model1.scale.z *= -1;
+                    // model1.updateMatrixWorld(true);
+                    // // // ✅ Tính bounding box sau khi scale
+                    // const box2 = new THREE.Box3().setFromObject(model1);
+                    // const min2 = box2.min;
+                    // model1.position.set(40, -min2.y, 445);
+                    // scene.add(model1);
+                    // // const boxHelper1 = new THREE.BoxHelper(model1, 'red'); // màu vàng
+                    // // scene.add(boxHelper1);
+                  } catch (e) {
+                    console.log(e);
+                  }
                 } catch { }
                 resolve();
-              },
-              (error) => {
-                resolve();
-                console.error("Lỗi khi parse GLB:", error);
               }
-            );
-          };
-          reader.readAsArrayBuffer(file);
-        } else if (typeFile == "zip") {
-          try {
-            const zip = await JSZip.loadAsync(file);
-            // Tìm file scene.gltf trong zip
-            const gltfEntry = Object.values(zip.files).find((f) =>
-              f.name.endsWith(".gltf")
-            );
-            if (!gltfEntry) {
-              console.error("Không tìm thấy file .gltf trong zip");
-              return;
-            }
-
-            const gltfText = await gltfEntry.async("string");
-
-            // Tạo blob URLs cho resource phụ
-            const blobUrlMap = {};
-            await Promise.all(
-              Object.values(zip.files).map(async (file) => {
-                const name = file.name;
-                if (/\.(bin|png|jpg|jpeg|gif|tga|ktx2|txt)$/i.test(name)) {
-                  const blob = await file.async("blob");
-                  blobUrlMap[name] = URL.createObjectURL(blob);
-                }
-              })
-            );
-
-            // ✅ Tạo manager và setURLModifier
-            const manager = new THREE.LoadingManager();
-            manager.setURLModifier((url) => {
-              const normalized = url.replace(/^(\.\/|\/)/, ""); // fix đường dẫn có ./ hoặc /
-              return blobUrlMap[normalized] || url;
-            });
-
-            // ✅ Truyền manager vào loader
-            const loader = new GLTFLoader(manager);
-
-            // Optional: DRACO support nếu cần
-            const dracoLoader = new DRACOLoader();
-            dracoLoader.setDecoderPath("/js/libs/draco/");
-            loader.setDRACOLoader(dracoLoader);
-
-            // Load từ gltfText
-            const gltf = await loader.parseAsync(gltfText, ""); // path rỗng vì bạn dùng blob
-            try {
-              const model = gltf.scene;
-              const box = new THREE.Box3().setFromObject(model);
-              const size = new THREE.Vector3();
-              let sizeX = 1,
-                sizeY = 1,
-                sizeZ = 1;
-              const sizeBox = box.getSize(size); // size sẽ chứa width, height, depth
-              model.traverse((child) => {
-                if (child.isMesh) {
-                  child.castShadow = true;
-                  child.material.side = THREE.DoubleSide;
-                  interactableMeshes.current.push(child);
-                }
-              });
-              if (!modelThreeCommonRef.current["door-window"]) {
-                modelThreeCommonRef.current["door-window"] = {};
-              }
-              modelThreeCommonRef.current["door-window"][model.uuid] = model;
-              // const model1 = model.clone()
-              // model1.scale.set(scaleModel, scaleModel, scaleModel);
-              // // model1.scale.x *= -1;
-              // model1.scale.z *= -1;
-              // model1.updateMatrixWorld(true);
-              // // // ✅ Tính bounding box sau khi scale
-              // const box2 = new THREE.Box3().setFromObject(model1);
-              // const min2 = box2.min;
-              // model1.position.set(40, -min2.y, 445);
-              // scene.add(model1);
-              // // const boxHelper1 = new THREE.BoxHelper(model1, 'red'); // màu vàng
-              // // scene.add(boxHelper1);
-            } catch (e) {
-              console.log(e);
-            }
-          } catch { }
-          resolve();
+            } catch { }
+          });
+          promiseAll.push(promiseC)
         }
-      });
-    } catch { }
+      }
+    }
+    await Promise.all(promiseAll)
+
   };
 
   useEffect(() => {
@@ -3796,7 +3888,110 @@ const initFunc = forwardRef((props, ref) => {
     }
   }, [dataDeepFloorplan]);
 
+
+  function getSizeAlongAxis(box3, axis) {
+    const points = [
+      new THREE.Vector3(box3.min.x, box3.min.y, box3.min.z),
+      new THREE.Vector3(box3.max.x, box3.min.y, box3.min.z),
+      new THREE.Vector3(box3.min.x, box3.max.y, box3.min.z),
+      new THREE.Vector3(box3.min.x, box3.min.y, box3.max.z),
+      new THREE.Vector3(box3.max.x, box3.max.y, box3.min.z),
+      new THREE.Vector3(box3.max.x, box3.min.y, box3.max.z),
+      new THREE.Vector3(box3.min.x, box3.max.y, box3.max.z),
+      new THREE.Vector3(box3.max.x, box3.max.y, box3.max.z),
+    ];
+
+    let min = Infinity, max = -Infinity;
+
+    for (const p of points) {
+      const projection = p.dot(axis);
+      min = Math.min(min, projection);
+      max = Math.max(max, projection);
+    }
+
+    return max - min;
+  }
+  function addGroupToBox(model, target) {
+    // === Bọc model vào group để pivot về giữa
+    const modelGroup = new THREE.Group();
+    modelGroup.add(model);
+
+    // === Tính bbox gốc để dời pivot về center
+    const modelBox = new THREE.Box3().setFromObject(modelGroup);
+    const modelCenter = new THREE.Vector3();
+    modelBox.getCenter(modelCenter);
+    modelGroup.position.sub(modelCenter); // Đưa model về gốc hình học
+
+    // === Gộp vào pivotGroup để xoay + scale
+    const pivotGroup = new THREE.Group();
+    pivotGroup.add(modelGroup);
+
+    // === Tính hướng model
+    const modelSize = new THREE.Vector3();
+    modelBox.getSize(modelSize);
+    const isModelAlongX = modelSize.x > modelSize.z;
+    const modelForward = modelSize.z > modelSize.x
+      ? new THREE.Vector3(0, 0, 1)
+      : new THREE.Vector3(1, 0, 0);
+
+    // === Tính hướng boxDoor
+    const boxDoorBox = new THREE.Box3().setFromObject(target);
+    const boxDoorSize = new THREE.Vector3();
+    boxDoorBox.getSize(boxDoorSize);
+    const boxDoorCenter = new THREE.Vector3();
+    boxDoorBox.getCenter(boxDoorCenter);
+    const isDoorAlongX = boxDoorSize.x > boxDoorSize.z;
+    const boxForward = boxDoorSize.z > boxDoorSize.x
+      ? new THREE.Vector3(0, 0, 1)
+      : new THREE.Vector3(1, 0, 0);
+
+    // === Xoay model để trùng hướng box
+    const angle = Math.atan2(boxForward.z, boxForward.x) - Math.atan2(modelForward.z, modelForward.x);
+    pivotGroup.rotation.y = angle;
+
+    // === Đưa model đến đúng vị trí box
+    pivotGroup.position.copy(boxDoorCenter);
+
+    // === Cập nhật để đo kích thước sau xoay
+    pivotGroup.updateMatrixWorld(true, true);
+    const rotatedBox = new THREE.Box3().setFromObject(pivotGroup);
+    const rotatedSize = new THREE.Vector3();
+    rotatedBox.getSize(rotatedSize);
+
+    // Trục định hướng theo quaternion sau xoay
+    const axisX = new THREE.Vector3(1, 0, 0).applyQuaternion(pivotGroup.quaternion).normalize();
+    const axisY = new THREE.Vector3(0, 1, 0).applyQuaternion(pivotGroup.quaternion).normalize();
+    const axisZ = new THREE.Vector3(0, 0, 1).applyQuaternion(pivotGroup.quaternion).normalize();
+
+    const boxpivotGroup = new THREE.Box3().setFromObject(pivotGroup);
+
+    const sizeX = getSizeAlongAxis(boxpivotGroup, axisX);
+    const sizeY = getSizeAlongAxis(boxpivotGroup, axisY);
+    const sizeZ = getSizeAlongAxis(boxpivotGroup, axisZ);
+
+
+    const scaleY = boxDoorSize.y / sizeY;
+    let scaleX, scaleZ;
+
+    if (isModelAlongX && isDoorAlongX) {
+      scaleX = boxDoorSize.x / sizeX;
+      scaleZ = boxDoorSize.z / sizeZ;
+    } else if (isModelAlongX && !isDoorAlongX) {
+      scaleX = boxDoorSize.z / sizeX;
+      scaleZ = boxDoorSize.x / sizeZ;
+    } else if (!isModelAlongX && isDoorAlongX) {
+      scaleX = boxDoorSize.x / sizeZ;
+      scaleZ = boxDoorSize.z / sizeX;
+    } else {
+      scaleX = boxDoorSize.z / sizeZ;
+      scaleZ = boxDoorSize.x / sizeX;
+    }
+
+    pivotGroup.scale.set(scaleX, scaleY, scaleZ);
+    return { obj: pivotGroup }
+  }
   useEffect(() => {
+    console.log("watch floorsotore......")
     if (!containerRef.current) return;
 
     const sceneWidth = containerRef.current.clientWidth;
@@ -3860,14 +4055,113 @@ const initFunc = forwardRef((props, ref) => {
     // });
 
     // 
-    // tạo 1 box cửa ở đây để substract;
-    const boxDoor = new THREE.Mesh(
-      new THREE.BoxGeometry(100, 150, 100), // rộng, cao, sâu
-      new THREE.MeshNormalMaterial({ color: 'red' })
-    );
-    boxDoor.position.set(111, 0, 181);
-    boxDoor.visible = false
-    scene.add(boxDoor)
+    // // tạo 1 box cửa ở đây để substract;
+    // const boxDoor = new THREE.Mesh(
+    //   new THREE.BoxGeometry(100, 150, 100), // rộng, cao, sâu
+    //   new THREE.MeshNormalMaterial({ color: 'red' })
+    // );
+    // boxDoor.position.set(111, 0, 181);
+    // boxDoor.visible = false
+    // scene.add(boxDoor)
+
+    let arrayDoor = {};
+    let arrUpdateDoorWindow = {};
+    if (doorStoreV2 && doorStoreV2.length) {
+      const doorMaterial = new THREE.MeshStandardMaterial({
+        color: 'red',
+        roughness: 0.6,
+        metalness: 0.2,
+      });
+
+      const heightDoor = 1 * 100; // chiều cao tường
+      const windowHeight = 0.6 * 100; // chiều cao cửa sổ (có thể điều chỉnh tùy thực tế)
+      const windowBaseY = 0.5 * 100;  // cách mặt đất 10 đơn vị
+
+      const modelThreeCommonRefT = modelThreeCommonRef.current;
+      let modelDoor;
+      try {
+        modelDoor =
+          modelThreeCommonRefT["door"][
+          Object.keys(modelThreeCommonRefT["door"])[0]
+          ];
+      } catch { }
+      let modelWindow;
+      try {
+        modelWindow =
+          modelThreeCommonRefT["window"][
+          Object.keys(modelThreeCommonRefT["window"])[0]
+          ];
+      } catch { }
+      doorStoreV2.forEach((door, i) => {
+        const { x, y, width, height, class: doorClass } = door;
+        let boxGeom, boxDoor;
+        const boxWidth = width;
+        const boxDepth = height;
+        const boxHeight = (doorClass === 'window') ? windowHeight : heightDoor;
+        if (doorClass === 'window') {
+          // Cửa sổ: chiều cao = windowHeight
+          boxGeom = new THREE.BoxGeometry(width, windowHeight, height);
+          boxDoor = new THREE.Mesh(boxGeom, doorMaterial);
+          // Đặt tâm cửa sổ ở giữa và cách nền 10 đơn vị
+          boxDoor.position.set(
+            x + width / 2,
+            windowBaseY + windowHeight / 2,
+            y + height / 2
+          );
+          boxDoor.name = `window-${i}`;
+
+          // === Clone modelWindow ===
+          const windowClone = modelWindow.clone(true);
+          windowClone.traverse(child => {
+            if (child.isMesh) {
+              if (child.material.map) {
+                child.material.map = null; // Bỏ texture để màu trắng hiện ra
+              }
+              child.material.color.set(0xffffff)
+            }
+          });
+
+          const { obj: windowGroup } = addGroupToBox(windowClone, boxDoor)
+          // === Add vào scene
+          scene.add(windowGroup);
+          arrUpdateDoorWindow[windowGroup.uuid] = windowGroup;
+
+        } else {
+          // === Tạo boxDoor (hộp mô phỏng vị trí cửa)
+          const boxGeom = new THREE.BoxGeometry(width, heightDoor, height);
+          boxDoor = new THREE.Mesh(boxGeom, doorMaterial);
+          boxDoor.position.set(
+            x + width / 2,
+            heightDoor / 2,
+            y + height / 2
+          );
+          boxDoor.name = `door-${i}`;
+          // === Clone model cửa
+          const doorClone = modelDoor.clone(true);
+
+          doorClone.traverse(child => {
+            if (child.isMesh) {
+              if (child.material.map) {
+                child.material.map = null; // Bỏ texture để màu trắng hiện ra
+              }
+              child.material.color.set(0xffffff)
+            }
+          });
+
+          const { obj: doorGroup } = addGroupToBox(doorClone, boxDoor)
+          // === Add vào scene
+          scene.add(doorGroup);
+          arrUpdateDoorWindow[doorGroup.uuid] = doorGroup;
+        }
+        arrayDoor[boxDoor.uuid] = boxDoor;
+        // scene.add(boxDoor);
+      });
+    }
+
+
+
+
+
 
     wallStoreV2.forEach(({ x, y, width, height }) => {
       const wallMesh = Wall3({
@@ -3878,7 +4172,7 @@ const initFunc = forwardRef((props, ref) => {
         height: wallHeightC,
         scene,
         color: wallColor,
-        boxDoor: boxDoor
+        doors: arrayDoor
       });
       wallMeshes.push(wallMesh);
       wallUpdateT.push(wallMesh);
@@ -4256,10 +4550,10 @@ const initFunc = forwardRef((props, ref) => {
     let floorHouse;
     if (
       floorStore &&
-      floorStore.minX &&
-      floorStore.maxX &&
-      floorStore.maxZ &&
-      floorStore.minZ
+      floorStore.minX != null &&
+      floorStore.maxX != null &&
+      floorStore.maxZ != null &&
+      floorStore.minZ != null
     ) {
       const floorMinX = floorStore.minX;
       const floorMaxX = floorStore.maxX;
@@ -4361,6 +4655,13 @@ const initFunc = forwardRef((props, ref) => {
       scene.remove(lightSphere);
       lightSphere.geometry.dispose();
       lightSphere.material.dispose();
+      try {
+        if (arrUpdateDoorWindow) {
+          for (let key in arrUpdateDoorWindow) {
+            scene.remove(arrUpdateDoorWindow[key])
+          }
+        }
+      } catch { }
 
       controls.update();
       renderer.render(scene, camera);
@@ -4387,10 +4688,11 @@ const initFunc = forwardRef((props, ref) => {
           );
         }
       } catch { }
+
       // renderer.dispose();
       // if (renderer.domElement) containerRef.current.removeChild(renderer.domElement);
     };
-  }, [wallStore, wallStoreV2, gridSize, floorStore]);
+  }, [wallStore, wallStoreV2, doorStoreV2, gridSize, floorStore]);
 
   useEffect(() => {
     if (gridSenceRef && gridSenceRef.current) {
@@ -5030,7 +5332,6 @@ const initFunc = forwardRef((props, ref) => {
                         ) {
                           updateTransformToFrom(mesh, body);
                         } else if (type == "scale") {
-                          console.log("vao scale roi nhe");
                           mesh.updateMatrixWorld(true);
 
                           // 3. Loại bỏ body cũ khỏi world
@@ -5544,7 +5845,6 @@ const initFunc = forwardRef((props, ref) => {
           const findRectanglesT = findRectangles(responseJson.data, labelAs);
           setpositionDoorWindow(findRectanglesT);
         }
-        console.log("responseJson", responseJson);
       } catch (error) {
         console.error("Lỗi upload:", error);
       }
@@ -5554,7 +5854,6 @@ const initFunc = forwardRef((props, ref) => {
   const [positionSelectObjet, setpositionSelectObjet] = useState([0, 0, 0]);
 
   useEffect(() => {
-    console.log("watchselectedRefObJSelected ", selectedRefObJSelected);
     if (selectedRefObJSelected) {
       const obj =
         selectedRefObJSelected.userData && selectedRefObJSelected.userData.pivot
@@ -5890,9 +6189,11 @@ const initFunc = forwardRef((props, ref) => {
     }
   }
   function handleSelectImgDetect(e) {
+
+
     const file = e.target.files[0];
     if (!file) return;
-
+    setdetectedRes(null)
     const reader = new FileReader();
 
     reader.onload = () => {
@@ -5911,7 +6212,6 @@ const initFunc = forwardRef((props, ref) => {
     const canvas = canvasbase64ImgDetect.current;
     const ctx = canvas.getContext("2d");
     const img = new Image();
-    console.log("ve lai anh roi nhe")
 
     img.onload = () => {
       // Set canvas size = container (hoặc ảnh gốc nếu không giới hạn)
@@ -5988,24 +6288,179 @@ const initFunc = forwardRef((props, ref) => {
     img.src = base64ImgDetect.imgbase64;
   }, [base64ImgDetect, detectedRes, confidenceThreshold, modeShowCanvasDetect, showImgDetect]);
 
+  // function adjustDoorsToFitWalls(doors, walls) {
+  //   const adjustedDoors = [];
+
+  //   doors.forEach((door, idx) => {
+  //     if (idx != 4) return
+  //     const dx1 = door.x;
+  //     const dx2 = door.x + door.width;
+  //     const dy1 = door.y;
+  //     const dy2 = door.y + door.height;
+
+  //     let bestIoU = 0;
+  //     let bestWall = null;
+  //     console.log("voi door=", door)
+
+  //     walls.forEach((wall) => {
+  //       const wx1 = wall.x;
+  //       const wx2 = wall.x + wall.width;
+  //       const wy1 = wall.y;
+  //       const wy2 = wall.y + wall.height;
+
+  //       const ix1 = Math.max(dx1, wx1);
+  //       const ix2 = Math.min(dx2, wx2);
+  //       const iy1 = Math.max(dy1, wy1);
+  //       const iy2 = Math.min(dy2, wy2);
+  //       const iw = Math.max(0, ix2 - ix1);
+  //       const ih = Math.max(0, iy2 - iy1);
+  //       const intersectionArea = iw * ih;
+
+  //       const unionArea =
+  //         door.width * door.height + wall.width * wall.height - intersectionArea;
+
+  //       const iou = intersectionArea / unionArea;
+
+  //       if (iou > bestIoU) {
+  //         bestIoU = iou;
+  //         bestWall = wall;
+  //       }
+  //     });
+
+  //     if (bestWall) {
+  //       console.log("tim thay wall=", bestWall)
+  //       const wallIsHorizontal = bestWall.width > bestWall.height;
+
+  //       let adjustedDoor = { ...door };
+
+  //       if (wallIsHorizontal) {
+  //         // Tường ngang (theo trục X): cửa nằm dọc theo X, dày theo Y
+  //         adjustedDoor.y = bestWall.y; // căn cửa theo Y của tường
+  //         adjustedDoor.height = bestWall.height; // lấy độ dày của tường
+  //       } else {
+  //         // Tường dọc (theo trục Y): cửa nằm dọc theo Y, dày theo X
+  //         adjustedDoor.x = bestWall.x; // căn cửa theo X của tường
+  //         adjustedDoor.width = bestWall.width; // lấy độ dày của tường
+  //       }
+  //       console.log("-------sau khi tinh lai", adjustedDoor)
+
+  //       adjustedDoors.push(adjustedDoor);
+  //     }
+  //   });
+
+  //   return adjustedDoors;
+  // }
+  function adjustDoorsToFitWalls(doors, walls) {
+    const adjustedDoors = [];
+
+    doors.forEach((door, idx) => {
+      const dx1 = door.x;
+      const dx2 = door.x + door.width;
+      const dy1 = door.y;
+      const dy2 = door.y + door.height;
+
+      let bestIoU = 0;
+      let bestWall = null;
+
+      walls.forEach((wall) => {
+
+        const wx1 = wall.x;
+        const wx2 = wall.x + wall.width;
+        const wy1 = wall.y;
+        const wy2 = wall.y + wall.height;
+
+        const ix1 = Math.max(dx1, wx1);
+        const ix2 = Math.min(dx2, wx2);
+        const iy1 = Math.max(dy1, wy1);
+        const iy2 = Math.min(dy2, wy2);
+        const iw = Math.max(0, ix2 - ix1);
+        const ih = Math.max(0, iy2 - iy1);
+        const intersectionArea = iw * ih;
+
+        const unionArea = door.width * door.height + wall.width * wall.height - intersectionArea;
+
+        const iou = intersectionArea / unionArea;
+
+        if (iou > bestIoU) {
+          bestIoU = iou;
+          bestWall = wall;
+        }
+      });
+
+      if (bestWall) {
+        const wallIsHorizontal = bestWall.width >= bestWall.height;
+        const adjustedDoor = { ...door };
+
+        if (wallIsHorizontal) {
+          // Căn lại theo trục OY
+          adjustedDoor.y = bestWall.y; // bám mép
+          adjustedDoor.height = bestWall.height; // dày khít với tường
+        } else {
+          // Căn lại theo trục OX
+          adjustedDoor.x = bestWall.x;
+          adjustedDoor.width = bestWall.width;
+        }
+
+        adjustedDoors.push(adjustedDoor);
+      }
+    });
+
+    return adjustedDoors;
+  }
 
   async function updateDataHouse() {
-    const predictions = detectedRes?.predictions.filter(item => item.confidence != null && item.confidence >= confidenceThreshold / 100)
+    const predictions = detectedRes?.predictions.filter(item => {
+      item.x = Math.ceil(item.x * unitPixelToThree);
+      item.y = Math.ceil(item.y * unitPixelToThree);
+      item.width = Math.ceil(item.width * unitPixelToThree);
+      item.height = Math.ceil(item.height * unitPixelToThree);
+      return item.confidence != null && item.confidence >= confidenceThreshold / 100
+    })
+    console.log("predictions", predictions)
+    let predictionDoor = [];
+    let predictWall = [];
+    let minX = 0, minY = 0;
+    let maxX = -0, maxY = -0;
     if (predictions) {
       const predictions_tem = predictions.map(p => {
         const x_start = p.x - p.width / 2;
         const y_start = p.y - p.height / 2;
-        return {
+        let dataT = {
           ...p,
           x: x_start,
           y: y_start,
         };
+        if (dataT.class == 'door' || dataT.class == 'window') {
+          predictionDoor.push(dataT)
+        }
+        if (dataT.class == 'wall') {
+          predictWall.push(dataT)
+        }
+        const x1 = dataT.x;
+        const x2 = dataT.x + dataT.width;
+        const y1 = dataT.y;
+        const y2 = dataT.y + dataT.height;
+
+        if (x1 < minX) minX = x1;
+        if (x2 > maxX) maxX = x2;
+        if (y1 < minY) minY = y1;
+        if (y2 > maxY) maxY = y2;
+
+        return dataT
       });
-      console.log("predictions", predictions)
-      console.log("predictions_tem", predictions_tem)
+      setFloorStore({
+        minX: minX,
+        maxX: maxX,
+        minZ: minY,
+        maxZ: maxY,
+      });
+      const kq1 = adjustDoorsToFitWalls(predictionDoor, predictWall);
+
       const gridSize = detectedRes?.gridSize
-      console.log("gridSize=", gridSize)
-      setWallStoreV2(predictions_tem);
+
+      setdoorStoreV2(kq1)
+      // setdoorStoreV2(predictionDoor)
+      setWallStoreV2(predictWall);
       setGridSize(gridSize);
     }
   }
@@ -6185,6 +6640,18 @@ const initFunc = forwardRef((props, ref) => {
                 />
               }
               label="UseGroup:"
+              labelPlacement="start"
+            />
+          </div>
+          <div>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={showFormDetect}
+                  onChange={(e) => setshowFormDetect(e.target.checked)}
+                />
+              }
+              label="Show From Detect:"
               labelPlacement="start"
             />
           </div>
@@ -6422,117 +6889,117 @@ const initFunc = forwardRef((props, ref) => {
           <div ref={miniViewRef}></div>
         </div>
       </div>
-      <div className="fixed top-[150px] right-[10px] border p-4">
-        <div>
-          <Button variant="contained" onClick={() => { refselectImgDetect.current?.click() }}>Chọn Ảnh</Button>
-          <input className="hidden" type="file" ref={refselectImgDetect} onInput={handleSelectImgDetect} />
-          <FormControl fullWidth className="ml-2 max-w-[150px]" size="small">
-            <InputLabel id="demo-simple-select-label">Model</InputLabel>
-            <Select
-              labelId="demo-simple-select-label"
-              id="demo-simple-select"
-              value={modelSelected}
-              label="Model"
-              onChange={(e) => { setmodelSelected(e.target.value) }}
-            >
-              <MenuItem value=''></MenuItem>
-              {modelNameYolo.map((name) => (
-                <MenuItem key={name} value={name}>
-                  {name}
-                </MenuItem>
-              ))}
-              {/* <MenuItem value='wall-detection-xi9ox'>wall-detection-xi9ox</MenuItem>
+      {showFormDetect ? (
+        <div className="fixed top-[150px] right-[10px] border p-4">
+          <div>
+            <Button variant="contained" onClick={() => { refselectImgDetect.current?.click() }}>Chọn Ảnh</Button>
+            <input className="hidden" type="file" ref={refselectImgDetect} onInput={handleSelectImgDetect} />
+            <FormControl fullWidth className="ml-2 max-w-[150px]" size="small">
+              <InputLabel id="demo-simple-select-label">Model</InputLabel>
+              <Select
+                labelId="demo-simple-select-label"
+                id="demo-simple-select"
+                value={modelSelected}
+                label="Model"
+                onChange={(e) => { setmodelSelected(e.target.value) }}
+              >
+                <MenuItem value=''></MenuItem>
+                {modelNameYolo.map((name) => (
+                  <MenuItem key={name} value={name}>
+                    {name}
+                  </MenuItem>
+                ))}
+                {/* <MenuItem value='wall-detection-xi9ox'>wall-detection-xi9ox</MenuItem>
               <MenuItem value='walldetector2'>walldetector2</MenuItem>
               <MenuItem value='wall-window-door-detection'>wall-window-door-detection</MenuItem>
               <MenuItem value='test-nsycv'>test-nsycv</MenuItem>
               <MenuItem value='segmentation-wall-door-window-yeaua'>segmentation-wall-door-window-yeaua</MenuItem> */}
 
-            </Select>
-          </FormControl>
-          <Button variant="contained" onClick={detectWallDoor}>Detection</Button>
-          <Button variant="contained" onClick={updateDataHouse}>Update House</Button>
-        </div>
-        <div className="flex items-start justify-between">
-          <div className="predict-img min-w-[500px] h-[500px] border mr-4 p-2">
-            {/* <img src={base64ImgDetect?.imgbase64} /> */}
-            <canvas ref={canvasbase64ImgDetect} width="500" height="500" className="" />
-          </div>
-          <div className="predict-container-1 border  p-2">
-            <div className="predict-container-param1">
-              <label>Confidence Threshold:</label> <br />
-              <Slider
-                valueLabelDisplay="on"
-                aria-label="Temperature"
-                defaultValue={30}
-                value={confidenceThreshold}
-                onChange={(e, newVal) => { setconfidenceThreshold(newVal) }}
-                // getAriaValueText={valuetext}
-                color="secondary"
-              />
-            </div>
-            <div className="predict-container-param2">
-              <label>Overlap Threshold:</label> <br />
-              <Slider
-                valueLabelDisplay="on"
-                aria-label="Temperature"
-                defaultValue={30}
-                value={overlapThreshold}
-                onChange={(e, newVal) => { setoverlapThreshold(newVal) }}
-                // getAriaValueText={valuetext}
-                color="secondary"
-              />
-            </div>
-            <div>
-              <FormControlLabel
-                control={<Checkbox checked={showImgDetect}
-                  onChange={(e) => setshowImgDetect(e.target.checked)} />}
-                label="Show Image:"
-                labelPlacement="start" // ← Label nằm bên trái
-              />
-            </div>
-            <FormControl fullWidth className="ml-2 max-w-[150px]" size="small">
-              <InputLabel id="demo-simple-select-label">Mode show</InputLabel>
-              <Select
-                labelId="demo-simple-select-label"
-                id="demo-simple-select"
-                value={modeShowCanvasDetect}
-                label="Model"
-                onChange={(e) => { setmodeShowCanvasDetect(e.target.value) }}
-              >
-                <MenuItem value='Draw Confidence'>Draw Confidence</MenuItem>
-                <MenuItem value='Draw Labels'>Draw Labels</MenuItem>
-                <MenuItem value='Draw Boxes'>Draw Boxes</MenuItem>
-                <MenuItem value='Censor Predictions'>Censor Predictions</MenuItem>
-
               </Select>
             </FormControl>
+            <Button variant="contained" onClick={detectWallDoor}>Detection</Button>
+            <Button variant="contained" onClick={updateDataHouse}>Update House</Button>
+          </div>
+          <div className="flex items-start justify-between">
+            <div className="predict-img min-w-[500px] h-[500px] border mr-4 p-2">
+              {/* <img src={base64ImgDetect?.imgbase64} /> */}
+              <canvas ref={canvasbase64ImgDetect} width="500" height="500" className="" />
+            </div>
+            <div className="predict-container-1 border  p-2">
+              <div className="predict-container-param1">
+                <label>Confidence Threshold:</label> <br />
+                <Slider
+                  valueLabelDisplay="on"
+                  aria-label="Temperature"
+                  defaultValue={30}
+                  value={confidenceThreshold}
+                  onChange={(e, newVal) => { setconfidenceThreshold(newVal) }}
+                  // getAriaValueText={valuetext}
+                  color="secondary"
+                />
+              </div>
+              <div className="predict-container-param2">
+                <label>Overlap Threshold:</label> <br />
+                <Slider
+                  valueLabelDisplay="on"
+                  aria-label="Temperature"
+                  defaultValue={30}
+                  value={overlapThreshold}
+                  onChange={(e, newVal) => { setoverlapThreshold(newVal) }}
+                  // getAriaValueText={valuetext}
+                  color="secondary"
+                />
+              </div>
+              <div>
+                <FormControlLabel
+                  control={<Checkbox checked={showImgDetect}
+                    onChange={(e) => setshowImgDetect(e.target.checked)} />}
+                  label="Show Image:"
+                  labelPlacement="start" // ← Label nằm bên trái
+                />
+              </div>
+              <FormControl fullWidth className="ml-2 max-w-[150px]" size="small">
+                <InputLabel id="demo-simple-select-label">Mode show</InputLabel>
+                <Select
+                  labelId="demo-simple-select-label"
+                  id="demo-simple-select"
+                  value={modeShowCanvasDetect}
+                  label="Model"
+                  onChange={(e) => { setmodeShowCanvasDetect(e.target.value) }}
+                >
+                  <MenuItem value='Draw Confidence'>Draw Confidence</MenuItem>
+                  <MenuItem value='Draw Labels'>Draw Labels</MenuItem>
+                  <MenuItem value='Draw Boxes'>Draw Boxes</MenuItem>
+                  <MenuItem value='Censor Predictions'>Censor Predictions</MenuItem>
+
+                </Select>
+              </FormControl>
 
 
-            <div className="predict-container-response mt-4">
-              <TextareaAutosize
-                className="!boder p-2"
-                aria-label="minimum height"
-                minRows={5}
-                maxRows={12}
-                placeholder=""
-                value={detectedRes && detectedRes.predictions ? JSON.stringify(detectedRes?.predictions) : ''}
-                style={{
-                  maxWidth: 200,
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                  padding: '8px',
-                  outline: 'none',
-                  fontFamily: 'inherit',
-                  fontSize: '14px',
-                  whiteSpace: 'pre-wrap', // giữ định dạng xuống dòng
-                }}
-              />
+              <div className="predict-container-response mt-4">
+                <TextareaAutosize
+                  className="!boder p-2"
+                  aria-label="minimum height"
+                  minRows={5}
+                  maxRows={12}
+                  placeholder=""
+                  value={detectedRes && detectedRes.predictions ? JSON.stringify(detectedRes?.predictions) : ''}
+                  style={{
+                    maxWidth: 200,
+                    border: '1px solid #ccc',
+                    borderRadius: '4px',
+                    padding: '8px',
+                    outline: 'none',
+                    fontFamily: 'inherit',
+                    fontSize: '14px',
+                    whiteSpace: 'pre-wrap', // giữ định dạng xuống dòng
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>
-
-
-      </div>
+      ) : ''}
     </>
   );
 });

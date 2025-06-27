@@ -13,6 +13,7 @@
     "@testing-library/user-event": "^13.5.0",
     "cannon-es": "^0.20.0",
     "cannon-es-debugger": "^1.0.0",
+    "fabric": "^5.5.2",
     "jszip": "^3.10.1",
     "lodash": "^4.17.21",
     "react": "^19.1.0",
